@@ -11,7 +11,6 @@ from src.puzzle_bank import add_puzzle
 
 sys.path.append("..")  # Add parent directory to path
 
-
 def choose_weighted_move(fen, base_rating):
     """
     Retrieves the top moves for the given position and chooses one based on weighted probabilities.
@@ -27,13 +26,11 @@ def choose_weighted_move(fen, base_rating):
     if not moves or total < MIN_GAMES:
         logger.warning(f"Insufficient data: moves={bool(moves)}, total={total}")
         return None
-    top_moves = moves[:4]
-    move_choices = [m[0] for m in top_moves]
-    weights = MOVE_WEIGHTS[: len(move_choices)]
+    move_choices = [m["uci"] for m in moves]
+    weights = MOVE_WEIGHTS[:len(move_choices)]
     chosen_move = random.choices(move_choices, weights=weights, k=1)[0]
-    logger.debug(f"Top moves: {top_moves}, Selected move: {chosen_move}")
+    logger.debug(f"Top moves: {[(m['uci'], m['freq']) for m in moves]}, Selected move: {chosen_move}")
     return chosen_move
-
 
 def evaluate_divergence(fen, base_rating, target_rating, ply):
     """
@@ -57,7 +54,6 @@ def evaluate_divergence(fen, base_rating, target_rating, ply):
     else:
         logger.info(f"Snapshot at ply {ply}: no divergence found")
         return None, None
-
 
 def generate_and_save_puzzles(base_rating, target_rating, min_ply=MIN_PLY, max_ply=MAX_PLY):
     """

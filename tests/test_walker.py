@@ -9,7 +9,6 @@ import chess
 # Add the project root to path
 sys.path.append("..")
 
-
 def fake_get_move_stats(fen, rating):
     """
     Returns legal move lists based on the current board FEN.
@@ -18,10 +17,17 @@ def fake_get_move_stats(fen, rating):
     """
     board = chess.Board(fen)
     if board.turn:  # White to move
-        return ([("e2e4", 0.6), ("g1f3", 0.3), ("d2d4", 0.1)], 100)
+        return ([
+            {"uci": "e2e4", "freq": 0.6, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+            {"uci": "g1f3", "freq": 0.3, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+            {"uci": "d2d4", "freq": 0.1, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2}
+        ], 100)
     else:  # Black to move
-        return ([("e7e5", 0.6), ("g8f6", 0.3), ("d7d5", 0.1)], 100)
-
+        return ([
+            {"uci": "e7e5", "freq": 0.6, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+            {"uci": "g8f6", "freq": 0.3, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+            {"uci": "d7d5", "freq": 0.1, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2}
+        ], 100)
 
 class TestWalker(unittest.TestCase):
     def custom_choices_factory(self, moves):
@@ -58,6 +64,10 @@ class TestWalker(unittest.TestCase):
             "fen": "fake_fen_after_move",
             "base_freqs": [0.6],
             "target_freqs": [0.6 + DIVERGENCE_THRESHOLD + delta],
+            "base_top_moves": ["e2e4"],
+            "target_top_moves": ["e2e4"],
+            "base_wdls": [(0.5, 0.3, 0.2)],
+            "target_wdls": [(0.5, 0.3, 0.2)]
         }
         mock_find_divergence.return_value = divergence_dict
 
@@ -98,6 +108,10 @@ class TestWalker(unittest.TestCase):
             "fen": "fake_fen_after_move",
             "base_freqs": [0.6],
             "target_freqs": [0.6 + DIVERGENCE_THRESHOLD - delta],
+            "base_top_moves": ["e2e4"],
+            "target_top_moves": ["e2e4"],
+            "base_wdls": [(0.5, 0.3, 0.2)],
+            "target_wdls": [(0.5, 0.3, 0.2)]
         }
         mock_find_divergence.return_value = divergence_dict
 
@@ -106,7 +120,6 @@ class TestWalker(unittest.TestCase):
         # Expect no puzzles added because the divergence gap is below threshold.
         self.assertEqual(puzzles, [])
         mock_add_puzzle.assert_not_called()
-
 
 if __name__ == "__main__":
     unittest.main()

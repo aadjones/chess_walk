@@ -6,7 +6,6 @@ from src.logger import logger
 
 sys.path.append("..")  # Add parent directory to path
 
-
 def find_divergence(fen, base_rating, target_rating):
     """
     Find positions where higher-rated players prefer a different move than lower-rated players.
@@ -33,23 +32,25 @@ def find_divergence(fen, base_rating, target_rating):
         logger.warning(f"Insufficient games: base={base_total}, target={target_total}, min required={MIN_GAMES}")
         return None
 
-    # Convert to dictionaries
-    base_dict = dict(base_moves)  # {move: frequency}
-    target_dict = dict(target_moves)
+    # Extract move data from dictionaries
+    base_dict = {move["uci"]: move["freq"] for move in base_moves}  # {uci: freq}
+    target_dict = {move["uci"]: move["freq"] for move in target_moves}  # {uci: freq}
 
     # Sort moves by frequency in descending order
-    sorted_base_moves = sorted(base_dict.items(), key=lambda x: x[1], reverse=True)
-    sorted_target_moves = sorted(target_dict.items(), key=lambda x: x[1], reverse=True)
+    sorted_base_moves = sorted(base_moves, key=lambda x: x["freq"], reverse=True)
+    sorted_target_moves = sorted(target_moves, key=lambda x: x["freq"], reverse=True)
 
     # Extract top moves for both ratings
-    top_base_move = sorted_base_moves[0][0] if sorted_base_moves else None
-    top_target_move = sorted_target_moves[0][0] if sorted_target_moves else None
+    top_base_move = sorted_base_moves[0]["uci"] if sorted_base_moves else None
+    top_target_move = sorted_target_moves[0]["uci"] if sorted_target_moves else None
 
     # Create arrays of moves and frequencies
-    base_top_moves = [move for move, _ in sorted_base_moves]
-    base_freqs = [freq for _, freq in sorted_base_moves]
-    target_top_moves = [move for move, _ in sorted_target_moves]
-    target_freqs = [freq for _, freq in sorted_target_moves]
+    base_top_moves = [move["uci"] for move in sorted_base_moves]
+    base_freqs = [move["freq"] for move in sorted_base_moves]
+    base_wdls = [(m["win_rate"], m["draw_rate"], m["loss_rate"]) for m in base_moves]
+    target_top_moves = [move["uci"] for move in sorted_target_moves]
+    target_freqs = [move["freq"] for move in sorted_target_moves]
+    target_wdls = [(m["win_rate"], m["draw_rate"], m["loss_rate"]) for m in target_moves]
 
     # Get the top move frequencies
     base_freq = base_dict.get(top_base_move, 0)
@@ -73,8 +74,10 @@ def find_divergence(fen, base_rating, target_rating):
                 "fen": fen,
                 "base_top_moves": base_top_moves,
                 "base_freqs": base_freqs,
+                "base_wdls": base_wdls,
                 "target_top_moves": target_top_moves,
                 "target_freqs": target_freqs,
+                "target_wdls": target_wdls,
             }
     else:
         logger.info("No divergence - same top move in both rating bands")
