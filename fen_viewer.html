@@ -1,0 +1,46 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>FEN Viewer</title>
+          <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAQAAAAAAAoAQAAFgAAACgAAAAQAAAAIAAAAAEABAAAAAAAgAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA/4QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA">
+          <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.css" />
+          <style>
+            .board { width: 400px; margin: 20px; }
+            button { margin: 5px; }
+            #info { margin-left: 20px; font-family: Arial, sans-serif; }
+          </style>
+        </head>
+        <body>
+          <div id="board" class="board"></div>
+          <button onclick="prev()">Previous</button>
+          <button onclick="next()">Next</button>
+          <div id="info"></div>
+          <script>
+            let fens = ["rn3rk1/ppp1qppp/5n2/8/2b5/P1P2N2/3PBPPP/R1BQ1RK1 b - - 3 10", "r1bqk1nr/ppp2pp1/1bnp3p/4p3/2B1P3/2NPBN2/PPP2PPP/R2QK2R w KQkq - 2 7", "r1bqk1nr/p4ppp/2p1p3/3p4/1bP2B2/2N1P3/PP3PPP/R2QKB1R b KQkq - 0 8"];
+            let names = ["Puzzle 1 (Ply 0)", "Puzzle 2 (Ply 0)", "Puzzle 3 (Ply 0)"];
+            let currentIndex = 0;
+            const board = Chessboard('board', {
+              position: 'start',
+              draggable: true,
+              pieceTheme: 'img/chesspieces/wiki/{piece}.svg'
+            });
+
+            function loadFEN(index) {
+              if (index >= 0 && index < fens.length) {
+                board.position(fens[index]);
+                document.getElementById('info').innerText = names[index];
+                currentIndex = index;
+              }
+            }
+
+            function prev() { loadFEN(currentIndex - 1); }
+            function next() { loadFEN(currentIndex + 1); }
+
+            loadFEN(0);
+          </script>
+        </body>
+        </html>
+        

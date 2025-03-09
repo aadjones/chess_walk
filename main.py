@@ -1,8 +1,14 @@
+import os
+from dotenv import load_dotenv
 from parameters import BASE_RATING, TARGET_RATING
 from src.walker import random_walk
 from src.divergence import find_divergence
 from src.puzzle_bank import save_bank
 from src.logger import logger
+
+from parameters import STUDY_ID
+
+load_dotenv()  # Load variables from .env file
 
 def main(num_positions=10):
     logger.info(f"Starting puzzle generation with {num_positions} positions")
@@ -28,7 +34,7 @@ def main(num_positions=10):
         logger.info(f"Saved {len(puzzles)} puzzles to output/puzzles.json")
     else:
         logger.warning("No puzzles were generated")
-
+    
 if __name__ == "__main__":
     logger.info("=== Starting Chess Divergence Puzzle Generator ===")
     main()
