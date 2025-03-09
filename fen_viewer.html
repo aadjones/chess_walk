@@ -23,17 +23,20 @@
           <button onclick="next()">Next</button>
           <div id="info"></div>
           <script>
-            let fens = ["r1bqkbnr/pp3ppp/2n5/2pp4/8/PB6/1PPP1PPP/RNBQK1NR w KQkq - 1 6"];
-            let names = ["Puzzle 1 (Ply 10)"];
-            let baseAllMoves = [["Nf3", "d3", "h3", "Qf3", "Nc3", "c3", "Ne2", "Ba4", "Ba2", "Qe2+", "c4", "Qh5"]];
-            let baseAllFrequencies = [[0.27, 0.25, 0.09, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.02, 0.02, 0.01]];
-            let targetAllMoves = [["d3", "Nf3", "h3", "Ne2", "Nc3", "c3", "Qf3", "Ba2", "Ba4", "Qe2+", "d4", "c4"]];
-            let targetAllFrequencies = [[0.34, 0.17, 0.15, 0.1, 0.07, 0.05, 0.04, 0.02, 0.02, 0.01, 0.01, 0.01]];
+            let fens = ["r1bqkbnr/pp3ppp/2n5/2pp4/8/PB6/1PPP1PPP/RNBQK1NR w KQkq - 1 6", "r1bq1rk1/pp1nbppp/2p1pn2/8/P1BP4/2N1PN2/1P3PPP/R1BQ1RK1 b - - 2 9", "rnbqk2r/ppp1ppbp/5np1/8/Q1pP4/2N2NP1/PP2PP1P/R1B1KB1R b KQkq - 1 6"];
+            let names = ["Puzzle 1 (Ply 10)", "Puzzle 2 (Ply 17)", "Puzzle 3 (Ply 11)"];
+            let baseAllMoves = [["Nf3", "d3", "h3", "Qf3", "Nc3", "c3", "Ne2", "Ba4", "Ba2", "Qe2+", "c4", "Qh5"], ["Nb6", "b6", "c5", "a6", "Nd5", "Qc7", "a5", "Re8", "Bd6", "e5", "h6", "b5"], ["c6", "Bd7", "Nc6", "Nfd7", "Nbd7", "Qd7", "b5"]];
+            let baseAllFrequencies = [[0.27, 0.25, 0.09, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.02, 0.02, 0.01], [0.28, 0.18, 0.13, 0.11, 0.1, 0.07, 0.05, 0.05, 0.01, 0.01, 0.01, 0.01], [0.32, 0.28, 0.17, 0.11, 0.11, 0.01, 0.0]];
+            let targetAllMoves = [["d3", "Nf3", "h3", "Ne2", "Nc3", "c3", "Qf3", "Ba2", "Ba4", "Qe2+", "d4", "c4"], ["b6", "c5", "a6", "Nd5", "Nb6", "Bd6", "Qc7", "a5"], ["Nfd7", "Nc6", "c6", "Nbd7", "Bd7"]];
+            let targetAllFrequencies = [[0.34, 0.17, 0.15, 0.1, 0.07, 0.05, 0.04, 0.02, 0.02, 0.01, 0.01, 0.01], [0.36, 0.36, 0.07, 0.07, 0.04, 0.04, 0.04, 0.04], [0.51, 0.18, 0.16, 0.12, 0.04]];
+            let baseRatings = ["1400", "2000", "2000"];  // Array of base ratings for each puzzle
+            let targetRatings = ["1800", "2500", "2500"];  // Array of target ratings for each puzzle
             let currentIndex = 0;
             const board = Chessboard('board', {
               position: 'start',
               draggable: true,
-              pieceTheme: 'img/chesspieces/wiki/{piece}.svg'
+              pieceTheme: 'img/chesspieces/wiki/{piece}.svg',
+              width: 400
             });
 
             function loadFEN(index) {
@@ -43,13 +46,13 @@
 
                 board.position(fens[index]);
                 
-                // Generate HTML for base (1400) moves
+                // Generate HTML for base moves
                 let baseMovesHtml = '';
                 for (let i = 0; i < baseAllMoves[index].length; i++) {
                   baseMovesHtml += `<tr><td>${baseAllMoves[index][i]}</td><td>${(baseAllFrequencies[index][i] * 100).toFixed(0)}%</td></tr>`;
                 }
                 
-                // Generate HTML for target (1800) moves
+                // Generate HTML for target moves
                 let targetMovesHtml = '';
                 for (let i = 0; i < targetAllMoves[index].length; i++) {
                   targetMovesHtml += `<tr><td>${targetAllMoves[index][i]}</td><td>${(targetAllFrequencies[index][i] * 100).toFixed(0)}%</td></tr>`;
@@ -60,7 +63,7 @@
                   <div class="tables-container">
                     <table class="move-table">
                       <thead>
-                        <tr><th colspan="2">1400</th></tr>
+                        <tr><th colspan="2">${baseRatings[index]}</th></tr>
                         <tr><th>Move</th><th>Freq</th></tr>
                       </thead>
                       <tbody>
@@ -69,7 +72,7 @@
                     </table>
                     <table class="move-table">
                       <thead>
-                        <tr><th colspan="2">1800</th></tr>
+                        <tr><th colspan="2">${targetRatings[index]}</th></tr>
                         <tr><th>Move</th><th>Freq</th></tr>
                       </thead>
                       <tbody>

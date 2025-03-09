@@ -1,10 +1,10 @@
 import os
 import argparse
+import json
+from pathlib import Path
 from dotenv import load_dotenv
 from parameters import BASE_RATING, TARGET_RATING
-from src.walker import random_walk
-from src.divergence import find_divergence
-from src.puzzle_bank import save_bank
+from src.walker import generate_and_save_puzzles
 from src.logger import logger
 
 from parameters import STUDY_ID
@@ -21,24 +21,24 @@ def main(num_positions=10):
     logger.info(f"Starting puzzle generation with {num_positions} positions")
     logger.info(f"Base rating: {BASE_RATING}, Target rating: {TARGET_RATING}")
     
-    puzzles = []
+    # Track new puzzles to report count at the end
+    new_puzzles_count = 0
     for i in range(num_positions):
         logger.info(f"Generating position {i+1}/{num_positions}")
-        fen = random_walk(BASE_RATING)
-        if fen:
-            logger.info(f"Found candidate position: {fen[:30]}...")
-            puzzle = find_divergence(fen, BASE_RATING, TARGET_RATING)
-            if puzzle:
-                puzzles.append(puzzle)
-                logger.info(f"Added puzzle: {puzzle['fen'][:20]}...")
-            else:
-                logger.warning(f"No divergence found for position {i+1}")
-        else:
-            logger.warning(f"Failed to generate position {i+1}")
+        puzzles = generate_and_save_puzzles(BASE_RATING, TARGET_RATING)
+        new_puzzles_count += len(puzzles)
+        if not puzzles:
+            logger.warning(f"No puzzles generated for walk {i+1}")
     
-    if puzzles:
-        save_bank(puzzles)
-        logger.info(f"Saved {len(puzzles)} puzzles to output/puzzles.json")
+    if new_puzzles_count > 0:
+        # Read the file to get the total count for logging
+        try:
+            with open("output/puzzles.json", "r") as f:
+                all_puzzles = json.load(f)
+            logger.info(f"Added {new_puzzles_count} new puzzles (total: {len(all_puzzles)})")
+        except Exception as e:
+            logger.error(f"Error reading puzzle file: {e}")
+            logger.info(f"Added {new_puzzles_count} new puzzles")
     else:
         logger.warning("No puzzles were generated")
     

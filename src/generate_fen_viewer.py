@@ -33,13 +33,20 @@ def generate_fen_viewer(puzzle_file, output_html="fen_viewer.html"):
 
     fens = [puzzle["fen"] for puzzle in puzzles]
     chapter_names = [f"Puzzle {i+1} (Ply {calculate_ply_from_fen(puzzle['fen'])})" for i, puzzle in enumerate(puzzles)]
+    
+    # Get all moves and frequencies
     base_all_moves = [[convert_coordinate_to_algebraic(puzzle["fen"], move) for move in puzzle["base_top_moves"]] for puzzle in puzzles]
     base_all_frequencies = [[round(freq, 2) for freq in puzzle["base_freqs"]] for puzzle in puzzles]
     target_all_moves = [[convert_coordinate_to_algebraic(puzzle["fen"], move) for move in puzzle["target_top_moves"]] for puzzle in puzzles]
     target_all_frequencies = [[round(freq, 2) for freq in puzzle["target_freqs"]] for puzzle in puzzles]
+    
+    # Extract rating information from each puzzle
+    # Use default values in case older puzzles don't have these fields
+    base_ratings = [puzzle.get("base_rating", "1400") for puzzle in puzzles]
+    target_ratings = [puzzle.get("target_rating", "1800") for puzzle in puzzles]
 
     with open(output_html, "w") as f:
-        f.write("""
+        f.write(f"""
         <!DOCTYPE html>
         <html>
         <head>
@@ -49,13 +56,13 @@ def generate_fen_viewer(puzzle_file, output_html="fen_viewer.html"):
           <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
           <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.css" />
           <style>
-            .board { width: 400px; margin: 20px; }
-            button { margin: 5px; }
-            #info { margin-left: 20px; font-family: Arial, sans-serif; }
-            .tables-container { display: flex; justify-content: space-between; width: 400px; }
-            .move-table { border-collapse: collapse; margin: 5px; }
-            .move-table th, .move-table td { border: 1px solid #ddd; padding: 4px; text-align: center; }
-            .move-table th { background-color: #f2f2f2; }
+            .board {{ width: 400px; margin: 20px; }}
+            button {{ margin: 5px; }}
+            #info {{ margin-left: 20px; font-family: Arial, sans-serif; }}
+            .tables-container {{ display: flex; justify-content: space-between; width: 400px; }}
+            .move-table {{ border-collapse: collapse; margin: 5px; }}
+            .move-table th, .move-table td {{ border: 1px solid #ddd; padding: 4px; text-align: center; }}
+            .move-table th {{ background-color: #f2f2f2; }}
           </style>
         </head>
         <body>
@@ -64,67 +71,70 @@ def generate_fen_viewer(puzzle_file, output_html="fen_viewer.html"):
           <button onclick="next()">Next</button>
           <div id="info"></div>
           <script>
-            let fens = """ + json.dumps(fens) + """;
-            let names = """ + json.dumps(chapter_names) + """;
-            let baseAllMoves = """ + json.dumps(base_all_moves) + """;
-            let baseAllFrequencies = """ + json.dumps(base_all_frequencies) + """;
-            let targetAllMoves = """ + json.dumps(target_all_moves) + """;
-            let targetAllFrequencies = """ + json.dumps(target_all_frequencies) + """;
+            let fens = {json.dumps(fens)};
+            let names = {json.dumps(chapter_names)};
+            let baseAllMoves = {json.dumps(base_all_moves)};
+            let baseAllFrequencies = {json.dumps(base_all_frequencies)};
+            let targetAllMoves = {json.dumps(target_all_moves)};
+            let targetAllFrequencies = {json.dumps(target_all_frequencies)};
+            let baseRatings = {json.dumps(base_ratings)};  // Array of base ratings for each puzzle
+            let targetRatings = {json.dumps(target_ratings)};  // Array of target ratings for each puzzle
             let currentIndex = 0;
-            const board = Chessboard('board', {
+            const board = Chessboard('board', {{
               position: 'start',
               draggable: true,
-              pieceTheme: 'img/chesspieces/wiki/{piece}.svg'
-            });
+              pieceTheme: 'img/chesspieces/wiki/{{piece}}.svg',
+              width: 400
+            }});
 
-            function loadFEN(index) {
-              if (index >= 0 && index < fens.length) {
+            function loadFEN(index) {{
+              if (index >= 0 && index < fens.length) {{
                 const activeColor = fens[index].split(' ')[1];
                 board.orientation(activeColor === 'w' ? 'white' : 'black');
 
                 board.position(fens[index]);
                 
-                // Generate HTML for base (1400) moves
+                // Generate HTML for base moves
                 let baseMovesHtml = '';
-                for (let i = 0; i < baseAllMoves[index].length; i++) {
-                  baseMovesHtml += `<tr><td>${baseAllMoves[index][i]}</td><td>${(baseAllFrequencies[index][i] * 100).toFixed(0)}%</td></tr>`;
-                }
+                for (let i = 0; i < baseAllMoves[index].length; i++) {{
+                  baseMovesHtml += `<tr><td>${{baseAllMoves[index][i]}}</td><td>${{(baseAllFrequencies[index][i] * 100).toFixed(0)}}%</td></tr>`;
+                }}
                 
-                // Generate HTML for target (1800) moves
+                // Generate HTML for target moves
                 let targetMovesHtml = '';
-                for (let i = 0; i < targetAllMoves[index].length; i++) {
-                  targetMovesHtml += `<tr><td>${targetAllMoves[index][i]}</td><td>${(targetAllFrequencies[index][i] * 100).toFixed(0)}%</td></tr>`;
-                }
+                for (let i = 0; i < targetAllMoves[index].length; i++) {{
+                  targetMovesHtml += `<tr><td>${{targetAllMoves[index][i]}}</td><td>${{(targetAllFrequencies[index][i] * 100).toFixed(0)}}%</td></tr>`;
+                }}
                 
                 document.getElementById('info').innerHTML = `
-                  <strong>${names[index]}</strong>
+                  <strong>${{names[index]}}</strong>
                   <div class="tables-container">
                     <table class="move-table">
                       <thead>
-                        <tr><th colspan="2">1400</th></tr>
+                        <tr><th colspan="2">${{baseRatings[index]}}</th></tr>
                         <tr><th>Move</th><th>Freq</th></tr>
                       </thead>
                       <tbody>
-                        ${baseMovesHtml}
+                        ${{baseMovesHtml}}
                       </tbody>
                     </table>
                     <table class="move-table">
                       <thead>
-                        <tr><th colspan="2">1800</th></tr>
+                        <tr><th colspan="2">${{targetRatings[index]}}</th></tr>
                         <tr><th>Move</th><th>Freq</th></tr>
                       </thead>
                       <tbody>
-                        ${targetMovesHtml}
+                        ${{targetMovesHtml}}
                       </tbody>
                     </table>
                   </div>
                 `;
                 currentIndex = index;
-              }
-            }
+              }}
+            }}
 
-            function prev() { loadFEN(currentIndex - 1); }
-            function next() { loadFEN(currentIndex + 1); }
+            function prev() {{ loadFEN(currentIndex - 1); }}
+            function next() {{ loadFEN(currentIndex + 1); }}
 
             loadFEN(0);
           </script>

@@ -5,9 +5,9 @@
 # Each value represents a range (e.g., 1400 means 1400-1599, 1600 means 1600-1799, etc.).
 
 # Using comma-separated values instead of ranges
-BASE_RATING = "1400" # represents 1400-1599
-TARGET_RATING = "1800" # represents 1800-1999
-RATING_GAP = 400
+BASE_RATING = "2000"
+TARGET_RATING = "2500" 
+RATING_GAP = 500
 
 # Valid rating values for the API (from documentation)
 VALID_RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500]
@@ -21,10 +21,9 @@ MOVE_WEIGHTS = [0.5, 0.3, 0.15, 0.05]  # Sum to 1.0, bias toward top moves
 
 # Divergence threshold
 MIN_GAMES = 0  # Per rating band
-DIVERGENCE_THRESHOLD = 0.05  # 5%+ difference in move frequency
+DIVERGENCE_THRESHOLD = 0.10  # 10%+ difference in move frequency
 
 # Add penalty settings
-BASE_THRESHOLD = 0.6  # 60% at min ply
 PENALTY_PER_PLY = 0.02  # Decrease threshold by 2% per ply
 
 # API settings

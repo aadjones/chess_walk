@@ -53,17 +53,20 @@ def find_divergence(fen, base_rating, target_rating):
     
     # Get the top move frequencies
     base_freq = base_dict.get(top_base_move, 0)
-    target_freq = target_dict.get(top_target_move, 0)
+    target_freq_of_base_move = target_dict.get(top_base_move, 0)
     
-    logger.info(f"Top move comparison - Base: {top_base_move} ({base_freq:.2f}), Target: {top_target_move} ({target_freq:.2f})")
+    logger.info(f"Top base move: {top_base_move} (Base: {base_freq:.2f}, Target: {target_freq_of_base_move:.2f})")
+    logger.info(f"Top target move: {top_target_move} ({target_dict.get(top_target_move, 0):.2f})")
     
+    # First check if the top moves are different
     if top_base_move != top_target_move:
-        diff = target_freq - base_freq
+        # Calculate how much less frequently the base's top move is played in the target rating
+        diff = base_freq - target_freq_of_base_move
         
         logger.debug(f"Move frequency difference: {diff:.2f} (threshold: {DIVERGENCE_THRESHOLD})")
         
         if diff >= DIVERGENCE_THRESHOLD:
-            logger.info(f"Divergence found! Base move: {top_base_move} ({base_freq:.2f}), Target move: {top_target_move} ({target_freq:.2f})")
+            logger.info(f"Divergence found! Base move: {top_base_move} (Base: {base_freq:.2f}, Target: {target_freq_of_base_move:.2f})")
             return {
                 "fen": fen,
                 "base_top_moves": base_top_moves,
@@ -73,5 +76,5 @@ def find_divergence(fen, base_rating, target_rating):
             }
     else:
         logger.info("No divergence - same top move in both rating bands")
-        
+    
     return None

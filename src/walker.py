@@ -5,8 +5,9 @@ import sys
 from src.api import get_move_stats
 from src.logger import logger
 from src.divergence import find_divergence
+from src.puzzle_bank import add_puzzle
 sys.path.append("..")  # Add parent directory to path
-from parameters import MIN_PLY, MAX_PLY, MOVE_WEIGHTS, MIN_GAMES, BASE_THRESHOLD, PENALTY_PER_PLY
+from parameters import MIN_PLY, MAX_PLY, MOVE_WEIGHTS, MIN_GAMES, PENALTY_PER_PLY, DIVERGENCE_THRESHOLD
 
 
 def random_walk(base_rating, target_ply=None):
@@ -53,38 +54,54 @@ def random_walk(base_rating, target_ply=None):
 
 # Updated to include divergence after each ply
 def random_walk_with_divergence(base_rating, target_rating, min_ply=10, max_ply=24):
+    logger.info(f"Starting random walk with divergence: base_rating={base_rating}, target_rating={target_rating}, min_ply={min_ply}, max_ply={max_ply}")
     board = chess.Board()
     fen = board.fen()
-    best_divergence = None
-    best_score = 0
+    divergence_positions = []
+    logger.debug(f"Initial position: {fen}")
 
     for ply in range(max_ply):
+        logger.debug(f"Processing ply {ply+1}/{max_ply}")
         moves, total = get_move_stats(fen, base_rating)
         if not moves or total < MIN_GAMES:
+            logger.warning(f"Insufficient data at ply {ply+1}: moves={bool(moves)}, total={total}")
             return None
         
         top_moves = moves[:4]
+        logger.debug(f"Top moves: {top_moves}")
         move_choices = [m[0] for m in top_moves]
         weights = MOVE_WEIGHTS[:len(move_choices)]
         move = random.choices(move_choices, weights=weights, k=1)[0]
+        logger.debug(f"Selected move: {move}")
         board.push_uci(move)
         fen = board.fen()
+        logger.debug(f"New position: {fen[:30]}...")
 
         if ply < min_ply:
+            logger.debug(f"Skipping divergence check (ply {ply+1} < min_ply {min_ply})")
             continue
 
+        logger.debug(f"Checking for divergence at ply {ply+1}")
         divergence = find_divergence(fen, base_rating, target_rating)
         if divergence:
             gap = divergence["target_freqs"][0] - divergence["base_freqs"][0]
             win_rate_diff = 0  # Placeholder; add if API supports
-            threshold = BASE_THRESHOLD - (ply - min_ply) * PENALTY_PER_PLY
             score = gap + win_rate_diff
-            if score > best_score and gap >= threshold:
-                best_score = score
-                best_divergence = divergence
-                best_divergence["ply"] = ply + 1
+            logger.debug(f"Divergence found - gap: {gap:.4f}, threshold: {DIVERGENCE_THRESHOLD:.4f}, score: {score:.4f}")
+            
+            if gap >= DIVERGENCE_THRESHOLD:
+                logger.info(f"Significant divergence found at ply {ply+1} with gap {gap:.4f}")
+                divergence["ply"] = ply + 1
+                divergence["score"] = score
+                divergence_positions.append(divergence)
+        else:
+            logger.debug(f"No divergence found at ply {ply+1}")
 
-    return best_divergence
+    if divergence_positions:
+        logger.info(f"Random walk completed with {len(divergence_positions)} significant divergence positions")
+    else:
+        logger.info("Random walk completed without finding any significant divergence")
+    return divergence_positions
 
 def apply_move(fen, move):
     """
@@ -104,3 +121,70 @@ def apply_move(fen, move):
     except Exception as e:
         logger.error(f"Error applying move {move} to position {fen}: {e}")
         return fen  # Return original FEN if there was an error
+
+def generate_and_save_puzzles(base_rating, target_rating, min_ply=10, max_ply=24):
+    """
+    Performs a random walk, detects divergences, and saves puzzles directly to the puzzle bank.
+    
+    Args:
+        base_rating (str): Rating band for base players
+        target_rating (str): Rating band for target players
+        min_ply (int): Minimum number of plies before checking for divergence
+        max_ply (int): Maximum number of plies to walk
+        
+    Returns:
+        list: List of puzzles that were added to the bank
+    """
+    logger.info(f"Starting random walk with divergence: base_rating={base_rating}, target_rating={target_rating}, min_ply={min_ply}, max_ply={max_ply}")
+    board = chess.Board()
+    fen = board.fen()
+    added_puzzles = []
+    logger.debug(f"Initial position: {fen}")
+
+    for ply in range(max_ply):
+        logger.debug(f"Processing ply {ply+1}/{max_ply}")
+        moves, total = get_move_stats(fen, base_rating)
+        if not moves or total < MIN_GAMES:
+            logger.warning(f"Insufficient data at ply {ply+1}: moves={bool(moves)}, total={total}")
+            return added_puzzles
+        
+        top_moves = moves[:4]
+        logger.debug(f"Top moves: {top_moves}")
+        move_choices = [m[0] for m in top_moves]
+        weights = MOVE_WEIGHTS[:len(move_choices)]
+        move = random.choices(move_choices, weights=weights, k=1)[0]
+        logger.debug(f"Selected move: {move}")
+        board.push_uci(move)
+        fen = board.fen()
+        logger.debug(f"New position: {fen[:30]}...")
+
+        if ply < min_ply:
+            logger.debug(f"Skipping divergence check (ply {ply+1} < min_ply {min_ply})")
+            continue
+
+        logger.debug(f"Checking for divergence at ply {ply+1}")
+        divergence = find_divergence(fen, base_rating, target_rating)
+        if divergence:
+            gap = divergence["target_freqs"][0] - divergence["base_freqs"][0]
+            logger.debug(f"Divergence found - gap: {gap:.4f}, threshold: {DIVERGENCE_THRESHOLD:.4f}")
+            
+            # If gap exceeds threshold, add to puzzle bank directly
+            if gap >= DIVERGENCE_THRESHOLD:
+                logger.info(f"Significant divergence found at ply {ply+1} with gap {gap:.4f}")
+                # Add metadata to the puzzle
+                divergence['base_rating'] = base_rating
+                divergence['target_rating'] = target_rating
+                divergence['ply'] = ply + 1
+                
+                # Add puzzle to the bank
+                add_puzzle(divergence)
+                added_puzzles.append(divergence)
+                logger.info(f"Added puzzle: {divergence['fen'][:20]}...")
+        else:
+            logger.debug(f"No divergence found at ply {ply+1}")
+
+    if added_puzzles:
+        logger.info(f"Random walk completed with {len(added_puzzles)} puzzles added to bank")
+    else:
+        logger.info("Random walk completed without finding any significant divergence")
+    return added_puzzles
