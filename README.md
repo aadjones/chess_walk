@@ -1,7 +1,7 @@
 # Chess Walk
 
 Take a random walk through the mind of a particular rating band of Lichess player. Compare the results
-to a stronger player. Learn!
+to a stronger player. Gain insights!
 
 ## Installation
 
@@ -27,11 +27,15 @@ pip install -r requirements.txt
 
 ## Usage
 
-From the project root, run
+Edit the parameters in ```parameters.py``` to taste.
+
+Then, from the project root, run
 
 ```python
-python main.py
+python main.py --num_walks 5
 ```
+
+This will take 5 walks to scrape puzzles. It then builds the file output/puzzles.json as well as the website output/puzzles.html. View the site with a local server to browse through the puzzles.
 
 ## Development
 

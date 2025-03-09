@@ -1,15 +1,15 @@
-import unittest
-import tempfile
 import json
 import os
-import chess
+import tempfile
+import unittest
 
 from src.generate_fen_viewer import (
     calculate_ply_from_fen,
-    get_active_color_from_fen,
     convert_coordinate_to_algebraic,
-    generate_fen_viewer
+    generate_fen_viewer,
+    get_active_color_from_fen,
 )
+
 
 class TestFENViewer(unittest.TestCase):
 
@@ -51,7 +51,7 @@ class TestFENViewer(unittest.TestCase):
                 "base_top_moves": ["e2e4", "d2d4"],
                 "base_freqs": [0.6, 0.3],
                 "target_top_moves": ["e2e4", "d2d4"],
-                "target_freqs": [0.5, 0.4]
+                "target_freqs": [0.5, 0.4],
             },
             {
                 "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
@@ -60,8 +60,8 @@ class TestFENViewer(unittest.TestCase):
                 "target_top_moves": ["e7e5", "d7d5"],
                 "target_freqs": [0.6, 0.3],
                 "base_rating": "1400",
-                "target_rating": "1800"
-            }
+                "target_rating": "1800",
+            },
         ]
 
         # Create a temporary puzzles JSON file.
@@ -87,5 +87,6 @@ class TestFENViewer(unittest.TestCase):
             os.remove(tmp_input_path)
             os.remove(tmp_output_path)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

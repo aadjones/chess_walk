@@ -1,12 +1,12 @@
 # Rating bands
 
-# According to the documentation, the ratings parameter accepts values from this enum: 
-# 0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500. 
+# According to the documentation, the ratings parameter accepts values from this enum:
+# 0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500.
 # Each value represents a range (e.g., 1400 means 1400-1599, 1600 means 1600-1799, etc.).
 
 # Using comma-separated values instead of ranges
 BASE_RATING = "2000"
-TARGET_RATING = "2500" 
+TARGET_RATING = "2500"
 RATING_GAP = 500
 
 # Valid rating values for the API (from documentation)

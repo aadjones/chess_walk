@@ -1,6 +1,8 @@
 import json
+
 import chess
 import chess.pgn
+
 
 def calculate_ply_from_fen(fen):
     # Split the FEN into its 6 fields
@@ -13,12 +15,13 @@ def calculate_ply_from_fen(fen):
     fullmove_number = int(fields[5])  # e.g., 10
 
     # Calculate ply
-    if active_color == 'w':
+    if active_color == "w":
         ply = (fullmove_number - 1) * 2
     else:  # active_color == 'b'
         ply = (fullmove_number - 1) * 2 + 1
 
     return ply
+
 
 def generate_pgn(puzzle_file, output_pgn="output/puzzles.pgn"):
     # Read the puzzles from JSON
@@ -30,7 +33,7 @@ def generate_pgn(puzzle_file, output_pgn="output/puzzles.pgn"):
         for i, puzzle in enumerate(puzzles):
             # Create a new game for each FEN
             game = chess.pgn.Game()
-            
+
             # Calculate ply from FEN
             try:
                 ply = calculate_ply_from_fen(puzzle["fen"])
@@ -49,6 +52,7 @@ def generate_pgn(puzzle_file, output_pgn="output/puzzles.pgn"):
             print(str(game).strip(), file=f, end="\n\n")
 
     print(f"Generated {output_pgn}. Import it into your Lichess study!")
+
 
 if __name__ == "__main__":
     generate_pgn("output/puzzles.json")

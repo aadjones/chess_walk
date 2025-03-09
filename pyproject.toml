@@ -3,3 +3,12 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v"  # Verbose output for clarity
 pythonpath = ["."]
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+skip = ["env", "venv", ".venv", "build", "dist"]
+

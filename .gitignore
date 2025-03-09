@@ -131,5 +131,5 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# Output puzzle files
-output/*.json
+# Output files
+output/
