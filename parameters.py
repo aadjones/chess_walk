@@ -13,7 +13,7 @@ RATING_GAP = 500
 VALID_RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500]
 
 # Ply range
-MIN_PLY = 10
+MIN_PLY = 4
 MAX_PLY = 20
 
 # Move weights (top 4 moves)
