@@ -1,4 +1,4 @@
-# Project Name
+# Chess Walk
 
 Take a random walk through the mind of a particular rating band of Lichess player. Compare the results
 to a stronger player. Learn!
