@@ -11,6 +11,10 @@
             .board { width: 400px; margin: 20px; }
             button { margin: 5px; }
             #info { margin-left: 20px; font-family: Arial, sans-serif; }
+            .tables-container { display: flex; justify-content: space-between; width: 400px; }
+            .move-table { border-collapse: collapse; margin: 5px; }
+            .move-table th, .move-table td { border: 1px solid #ddd; padding: 4px; text-align: center; }
+            .move-table th { background-color: #f2f2f2; }
           </style>
         </head>
         <body>
@@ -19,8 +23,12 @@
           <button onclick="next()">Next</button>
           <div id="info"></div>
           <script>
-            let fens = ["rn3rk1/ppp1qppp/5n2/8/2b5/P1P2N2/3PBPPP/R1BQ1RK1 b - - 3 10", "r1bqk1nr/ppp2pp1/1bnp3p/4p3/2B1P3/2NPBN2/PPP2PPP/R2QK2R w KQkq - 2 7", "r1bqk1nr/p4ppp/2p1p3/3p4/1bP2B2/2N1P3/PP3PPP/R2QKB1R b KQkq - 0 8"];
-            let names = ["Puzzle 1 (Ply 0)", "Puzzle 2 (Ply 0)", "Puzzle 3 (Ply 0)"];
+            let fens = ["r1bqkbnr/pp3ppp/2n5/2pp4/8/PB6/1PPP1PPP/RNBQK1NR w KQkq - 1 6"];
+            let names = ["Puzzle 1 (Ply 10)"];
+            let baseAllMoves = [["Nf3", "d3", "h3", "Qf3", "Nc3", "c3", "Ne2", "Ba4", "Ba2", "Qe2+", "c4", "Qh5"]];
+            let baseAllFrequencies = [[0.27, 0.25, 0.09, 0.08, 0.08, 0.04, 0.04, 0.04, 0.03, 0.02, 0.02, 0.01]];
+            let targetAllMoves = [["d3", "Nf3", "h3", "Ne2", "Nc3", "c3", "Qf3", "Ba2", "Ba4", "Qe2+", "d4", "c4"]];
+            let targetAllFrequencies = [[0.34, 0.17, 0.15, 0.1, 0.07, 0.05, 0.04, 0.02, 0.02, 0.01, 0.01, 0.01]];
             let currentIndex = 0;
             const board = Chessboard('board', {
               position: 'start',
@@ -30,8 +38,46 @@
 
             function loadFEN(index) {
               if (index >= 0 && index < fens.length) {
+                const activeColor = fens[index].split(' ')[1];
+                board.orientation(activeColor === 'w' ? 'white' : 'black');
+
                 board.position(fens[index]);
-                document.getElementById('info').innerText = names[index];
+                
+                // Generate HTML for base (1400) moves
+                let baseMovesHtml = '';
+                for (let i = 0; i < baseAllMoves[index].length; i++) {
+                  baseMovesHtml += `<tr><td>${baseAllMoves[index][i]}</td><td>${(baseAllFrequencies[index][i] * 100).toFixed(0)}%</td></tr>`;
+                }
+                
+                // Generate HTML for target (1800) moves
+                let targetMovesHtml = '';
+                for (let i = 0; i < targetAllMoves[index].length; i++) {
+                  targetMovesHtml += `<tr><td>${targetAllMoves[index][i]}</td><td>${(targetAllFrequencies[index][i] * 100).toFixed(0)}%</td></tr>`;
+                }
+                
+                document.getElementById('info').innerHTML = `
+                  <strong>${names[index]}</strong>
+                  <div class="tables-container">
+                    <table class="move-table">
+                      <thead>
+                        <tr><th colspan="2">1400</th></tr>
+                        <tr><th>Move</th><th>Freq</th></tr>
+                      </thead>
+                      <tbody>
+                        ${baseMovesHtml}
+                      </tbody>
+                    </table>
+                    <table class="move-table">
+                      <thead>
+                        <tr><th colspan="2">1800</th></tr>
+                        <tr><th>Move</th><th>Freq</th></tr>
+                      </thead>
+                      <tbody>
+                        ${targetMovesHtml}
+                      </tbody>
+                    </table>
+                  </div>
+                `;
                 currentIndex = index;
               }
             }

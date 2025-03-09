@@ -32,7 +32,7 @@ class TestWalker(unittest.TestCase):
         start_fen = chess.Board().fen()
         
         # Invalid move
-        invalid_move = "e2e5"  # Pawn can't move two squares diagonally
+        invalid_move = "e2e5"  # Pawn can't move three squares forward
         result_fen = apply_move(start_fen, invalid_move)
         
         # Should return the original FEN

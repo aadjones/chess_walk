@@ -33,17 +33,31 @@ def find_divergence(fen, base_rating, target_rating):
         logger.warning(f"Insufficient games: base={base_total}, target={target_total}, min required={MIN_GAMES}")
         return None
     
+    # Convert to dictionaries
     base_dict = dict(base_moves)  # {move: frequency}
     target_dict = dict(target_moves)
     
-    top_base_move = max(base_dict, key=base_dict.get)
-    top_target_move = max(target_dict, key=target_dict.get)
+    # Sort moves by frequency in descending order
+    sorted_base_moves = sorted(base_dict.items(), key=lambda x: x[1], reverse=True)
+    sorted_target_moves = sorted(target_dict.items(), key=lambda x: x[1], reverse=True)
     
-    logger.info(f"Top move comparison - Base: {top_base_move} ({base_dict[top_base_move]:.2f}), Target: {top_target_move} ({target_dict[top_target_move]:.2f})")
+    # Extract top moves for both ratings
+    top_base_move = sorted_base_moves[0][0] if sorted_base_moves else None
+    top_target_move = sorted_target_moves[0][0] if sorted_target_moves else None
+    
+    # Create arrays of moves and frequencies
+    base_top_moves = [move for move, _ in sorted_base_moves]
+    base_freqs = [freq for _, freq in sorted_base_moves]
+    target_top_moves = [move for move, _ in sorted_target_moves]
+    target_freqs = [freq for _, freq in sorted_target_moves]
+    
+    # Get the top move frequencies
+    base_freq = base_dict.get(top_base_move, 0)
+    target_freq = target_dict.get(top_target_move, 0)
+    
+    logger.info(f"Top move comparison - Base: {top_base_move} ({base_freq:.2f}), Target: {top_target_move} ({target_freq:.2f})")
     
     if top_base_move != top_target_move:
-        base_freq = base_dict.get(top_base_move, 0)
-        target_freq = target_dict.get(top_target_move, 0)
         diff = target_freq - base_freq
         
         logger.debug(f"Move frequency difference: {diff:.2f} (threshold: {DIVERGENCE_THRESHOLD})")
@@ -52,10 +66,10 @@ def find_divergence(fen, base_rating, target_rating):
             logger.info(f"Divergence found! Base move: {top_base_move} ({base_freq:.2f}), Target move: {top_target_move} ({target_freq:.2f})")
             return {
                 "fen": fen,
-                "base_top_move": top_base_move,
-                "base_freq": base_freq,
-                "target_top_move": top_target_move,
-                "target_freq": target_freq
+                "base_top_moves": base_top_moves,
+                "base_freqs": base_freqs,
+                "target_top_moves": target_top_moves,
+                "target_freqs": target_freqs
             }
     else:
         logger.info("No divergence - same top move in both rating bands")

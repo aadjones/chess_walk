@@ -1,4 +1,5 @@
 import os
+import argparse
 from dotenv import load_dotenv
 from parameters import BASE_RATING, TARGET_RATING
 from src.walker import random_walk
@@ -9,6 +10,12 @@ from src.logger import logger
 from parameters import STUDY_ID
 
 load_dotenv()  # Load variables from .env file
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Chess Divergence Puzzle Generator')
+    parser.add_argument('--num_positions', type=int, default=10,
+                        help='Number of positions to generate (default: 10)')
+    return parser.parse_args()
 
 def main(num_positions=10):
     logger.info(f"Starting puzzle generation with {num_positions} positions")
@@ -37,5 +44,6 @@ def main(num_positions=10):
     
 if __name__ == "__main__":
     logger.info("=== Starting Chess Divergence Puzzle Generator ===")
-    main()
+    args = parse_args()
+    main(args.num_positions)
     logger.info("=== Finished Chess Divergence Puzzle Generator ===")

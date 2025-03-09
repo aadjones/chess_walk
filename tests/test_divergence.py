@@ -10,9 +10,9 @@ def test_find_divergence():
     with patch("src.divergence.get_move_stats") as mock_stats:
         mock_stats.side_effect = [(base_moves, 1000), (target_moves, 1000)]
         result = find_divergence("fake_fen", "1400-1600", "1800-2000")
-        assert result["base_top_move"] == "e2e4"
-        assert result["target_top_move"] == "g1f3"
-        assert result["target_freq"] - result["base_freq"] >= DIVERGENCE_THRESHOLD
+        assert result["base_top_moves"][0] == "e2e4"
+        assert result["target_top_moves"][0] == "g1f3"
+        assert result["target_freqs"][0] - result["base_freqs"][0] >= DIVERGENCE_THRESHOLD
 
 def test_find_divergence_different_top_moves():
     # Test when top moves are different and frequency difference exceeds threshold
@@ -23,10 +23,16 @@ def test_find_divergence_different_top_moves():
         mock_stats.side_effect = [(base_moves, 1000), (target_moves, 1000)]
         result = find_divergence("fake_fen", "1400-1600", "1800-2000")
         
-        assert result["base_top_move"] == "e2e4"
-        assert result["target_top_move"] == "g1f3"
-        assert result["target_freq"] - result["base_freq"] >= DIVERGENCE_THRESHOLD
+        assert result["base_top_moves"][0] == "e2e4"
+        assert result["target_top_moves"][0] == "g1f3"
+        assert result["target_freqs"][0] - result["base_freqs"][0] >= DIVERGENCE_THRESHOLD
         assert result["fen"] == "fake_fen"
+        
+        # Check that the arrays contain all moves
+        assert "e2e4" in result["base_top_moves"]
+        assert "g1f3" in result["base_top_moves"]
+        assert "e2e4" in result["target_top_moves"]
+        assert "g1f3" in result["target_top_moves"]
 
 def test_find_divergence_same_top_move():
     # Test when top moves are the same - should return None
@@ -48,7 +54,7 @@ def test_find_divergence_below_threshold():
         mock_stats.side_effect = [(base_moves, 1000), (target_moves, 1000)]
         result = find_divergence("fake_fen", "1400-1600", "1800-2000")
         
-        assert result is None or result["target_freq"] - result["base_freq"] >= DIVERGENCE_THRESHOLD
+        assert result is None or result["target_freqs"][0] - result["base_freqs"][0] >= DIVERGENCE_THRESHOLD
 
 def test_find_divergence_insufficient_games():
     # Test when there aren't enough games - should return None
