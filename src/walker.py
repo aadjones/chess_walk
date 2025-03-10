@@ -48,7 +48,6 @@ def choose_weighted_move(fen, base_rating, temperature=TEMPERATURE):
     logger.debug(f"Moves: {[(m['uci'], m['freq']) for m in moves]}, Scaled Weights: {normalized_weights}, Selected move: {chosen_move}")
     return chosen_move
 
-
 def evaluate_divergence(fen, base_rating, target_rating, ply):
     """
     Evaluates the current position for divergence between rating cohorts.
@@ -60,38 +59,16 @@ def evaluate_divergence(fen, base_rating, target_rating, ply):
         ply (int): Current ply number.
 
     Returns:
-        tuple: (divergence dictionary, gap) if divergence data is available, else (None, None)
+        dict or None: Divergence dictionary if found, else None
     """
     logger.debug(f"Evaluating divergence at ply {ply}")
     divergence = find_divergence(fen, base_rating, target_rating)
     if divergence:
-        # Use the Freq column directly instead of recalculating
-        base_df = divergence["base_df"].sort_values(by="Freq", ascending=False)
-        target_df = divergence["target_df"].sort_values(by="Freq", ascending=False)
-
-        # Get frequencies for the top moves
-        base_freqs = base_df["Freq"]
-        target_freqs = target_df["Freq"]
-
-        # Ensure there are frequencies to compare
-        if base_freqs.empty or target_freqs.empty:
-            logger.warning("Empty frequency data in DataFrame")
-            return divergence, 0.0
-
-        # Get the top move frequencies
-        top_base_move = base_df.iloc[0]["Move"]
-        top_target_move = target_df.iloc[0]["Move"]
-
-        # Find the frequency of the top base move in both DataFrames
-        base_freq = base_freqs.iloc[0]
-        target_freq_of_base_move = target_df[target_df["Move"] == top_base_move]["Freq"].iloc[0] if top_base_move in target_df["Move"].values else 0
-
-        gap = base_freq - target_freq_of_base_move
-        logger.debug(f"Snapshot at ply {ply}: gap = {gap:.4f}, threshold = {DIVERGENCE_THRESHOLD:.4f}, top_base_move={top_base_move}, top_target_move={top_target_move}")
-        return divergence, gap
+        logger.debug(f"Snapshot at ply {ply}: divergence found with top_base_move={divergence['top_base_move']}, top_target_move={divergence['top_target_move']}")
+        return divergence
     else:
         logger.info(f"Snapshot at ply {ply}: no divergence found")
-        return None, None
+        return None
 
 def validate_initial_position(fen, base_rating, target_rating):
     """
@@ -112,7 +89,7 @@ def validate_initial_position(fen, base_rating, target_rating):
         return False
     return True
 
-def create_puzzle_data(divergence, base_rating, target_rating, ply, gap):
+def create_puzzle_data(divergence, base_rating, target_rating, ply):
     """
     Creates a dictionary containing puzzle data for the given divergence.
 
@@ -121,7 +98,6 @@ def create_puzzle_data(divergence, base_rating, target_rating, ply, gap):
         base_rating (str): Rating band for base cohort.
         target_rating (str): Rating band for target cohort.
         ply (int): Current ply number.
-        gap (float): Divergence gap.
 
     Returns:
         dict: Puzzle data dictionary.
@@ -147,7 +123,7 @@ def create_puzzle_data(divergence, base_rating, target_rating, ply, gap):
         )),
     }
 
-def build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_idx, ply, gap):
+def build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_idx, ply):
     """
     Builds a DataFrame for the puzzle with base and target cohort data.
 
@@ -158,7 +134,6 @@ def build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_i
         target_rating (str): Rating band for target cohort.
         puzzle_idx (int): Index of the puzzle.
         ply (int): Current ply number.
-        gap (float): Divergence gap.
 
     Returns:
         pd.DataFrame: Combined DataFrame with base and target cohort data, indexed by Cohort, Row, and PuzzleIdx.
@@ -168,14 +143,12 @@ def build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_i
         Rating=base_rating,
         PuzzleIdx=puzzle_idx,
         Ply=ply,
-        DivergenceGap=gap
     )
     target_df = divergence["target_df"].assign(
         FEN=fen,
         Rating=target_rating,
         PuzzleIdx=puzzle_idx,
         Ply=ply,
-        DivergenceGap=gap
     )
     puzzle_df = pd.concat([base_df, target_df], keys=["base", "target"])
     puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
@@ -256,7 +229,7 @@ def generate_and_save_puzzles(base_rating, target_rating, min_ply=MIN_PLY, max_p
             continue
 
         # Evaluate divergence
-        divergence, gap = evaluate_divergence(fen, base_rating, target_rating, ply + 1)
+        divergence = evaluate_divergence(fen, base_rating, target_rating, ply + 1)
         if divergence is None:
             recent_logs = [record.getMessage() for record in logger.handlers[0].buffer[-5:]]
             logger.debug(f"Recent logs: {recent_logs}")
@@ -266,21 +239,18 @@ def generate_and_save_puzzles(base_rating, target_rating, min_ply=MIN_PLY, max_p
             logger.info(f"Snapshot at ply {ply+1}: no divergence found")
             continue
 
-        # Check if divergence gap meets the threshold
-        if gap >= DIVERGENCE_THRESHOLD:
-            logger.info(f"Significant divergence found at ply {ply+1} with gap {gap:.4f}")
-            puzzle_data = create_puzzle_data(divergence, base_rating, target_rating, ply + 1, gap)
-            added_puzzles.append(puzzle_data)
+        # Save every divergence detected (no gap threshold!)
+        logger.info(f"Significant divergence found at ply {ply+1}")
+        puzzle_data = create_puzzle_data(divergence, base_rating, target_rating, ply + 1)
+        added_puzzles.append(puzzle_data)
 
-            # Build and save the puzzle DataFrame
-            puzzle_idx = len(added_puzzles) - 1
-            logger.debug(f"Assigning PuzzleIdx: {puzzle_idx}")
-            puzzle_df = build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_idx, ply + 1, gap)
-            save_puzzle_to_csv(puzzle_df)
+        # Build and save the puzzle DataFrame
+        puzzle_idx = len(added_puzzles) - 1
+        logger.debug(f"Assigning PuzzleIdx: {puzzle_idx}")
+        puzzle_df = build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_idx, ply + 1)
+        save_puzzle_to_csv(puzzle_df)
 
-            logger.info(f"Saved puzzle: {divergence['fen'][:20]}...")
-        else:
-            logger.info(f"Snapshot at ply {ply+1} evaluated: divergence gap {gap:.4f} did not meet threshold")
+        logger.info(f"Saved puzzle: {divergence['fen'][:20]}...")
 
     # Log the result of the walk
     if added_puzzles:

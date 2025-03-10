@@ -19,7 +19,7 @@ def build_move_df(moves):
         for move in moves
     ])
 
-def check_frequency_divergence(base_df, target_df, p_threshold=0.05):
+def check_frequency_divergence(base_df, target_df, p_threshold=0.10):
     """Perform chi-square test to check if move frequencies differ significantly."""
     all_moves = set(base_df["Move"]).union(set(target_df["Move"]))
     contingency = pd.DataFrame(index=list(all_moves), columns=["Base", "Target"]).fillna(0)
@@ -32,7 +32,7 @@ def check_frequency_divergence(base_df, target_df, p_threshold=0.05):
     chi2, p_value, dof, expected = chi2_contingency(contingency)
     return p_value < p_threshold, p_value
 
-def check_win_rate_difference(base_df, target_df, move, p_threshold=0.05, min_games=5):
+def check_win_rate_difference(base_df, target_df, move, p_threshold=0.10, min_games=5):
     """Perform Z-test to check if win rate for a move differs significantly."""
     base_row = base_df[base_df["Move"] == move].iloc[0] if move in base_df["Move"].values else None
     target_row = target_df[target_df["Move"] == move].iloc[0] if move in target_df["Move"].values else None
@@ -47,8 +47,8 @@ def check_win_rate_difference(base_df, target_df, move, p_threshold=0.05, min_ga
     target_better = p_value < p_threshold and target_row["White %"] > base_row["White %"]
     return target_better, p_value
 
-def find_divergence(fen, base_rating, target_rating, p_threshold=0.05):
-    """Find positions where higher-rated players prefer a different move with a better outcome."""
+def find_divergence(fen, base_rating, target_rating, p_threshold=0.10):
+    """Find positions where the target cohort’s top move outperforms the base cohort’s top move when played by the base cohort."""
     logger.info(f"Analyzing position for divergence between ratings {base_rating} and {target_rating}")
     logger.debug(f"Position: {fen}")
     base_moves, base_total = get_move_stats(fen, base_rating)
@@ -58,7 +58,7 @@ def find_divergence(fen, base_rating, target_rating, p_threshold=0.05):
         return None
     if base_total < MIN_GAMES or target_total < MIN_GAMES:
         logger.warning(f"Insufficient games: base={base_total}, target={target_total}, min required={MIN_GAMES}")
-        return None  # This ensures early exit
+        return None
     base_df = build_move_df(base_moves)
     target_df = build_move_df(target_moves)
     logger.debug(f"Base DataFrame:\n{base_df}")
@@ -75,14 +75,16 @@ def find_divergence(fen, base_rating, target_rating, p_threshold=0.05):
     if top_base_move == top_target_move:
         logger.info("No divergence - same top move in both rating bands")
         return None
-    target_better, p_win = check_win_rate_difference(base_df, target_df, top_target_move, p_threshold)
-    logger.info(f"Z-test for {top_target_move}: p-value = {p_win if p_win is not None else 'N/A':.4f}, "
-                f"Target better = {target_better}")
-    if target_better:
-        base_win = base_df[base_df["Move"] == top_target_move]["White %"].iloc[0]
-        target_win = target_df[target_df["Move"] == top_target_move]["White %"].iloc[0]
-        logger.info(f"Base win rate: {base_win:.2f}%, Target win rate: {target_win:.2f}%")
-        logger.info(f"Divergence confirmed! Target prefers {top_target_move} with better outcome")
+    # Compare target move’s win rate to base’s top move win rate in base cohort
+    base_top_win = base_df.iloc[0]["White %"]
+    base_win = base_df[base_df["Move"] == top_target_move]["White %"].iloc[0] if top_target_move in base_df["Move"].values else 0
+    base_games = base_df[base_df["Move"] == top_target_move]["Games"].iloc[0] if top_target_move in base_df["Move"].values else 0
+    target_win = target_df[target_df["Move"] == top_target_move]["White %"].iloc[0]  # For logging only
+    if base_win > base_top_win and base_games >= 5:  # Target move beats base’s top move in base cohort
+        logger.info(f"Base cohort win rate for top move {top_base_move}: {base_top_win:.2f}%, "
+                    f"Base cohort win rate for {top_target_move}: {base_win:.2f}% (games: {base_games}), "
+                    f"Target cohort win rate: {target_win:.2f}%")
+        logger.info(f"Divergence detected! Target prefers {top_target_move}, outperforms base top move")
         return {
             "fen": fen,
             "base_rating": base_rating,
@@ -92,7 +94,9 @@ def find_divergence(fen, base_rating, target_rating, p_threshold=0.05):
             "top_base_move": top_base_move,
             "top_target_move": top_target_move,
             "p_freq": p_freq,
-            "p_win": p_win,
+            "base_win_for_target_move": base_win,
+            "base_win_for_top_move": base_top_win,
         }
-    logger.info("Target’s top move not significantly better")
+    logger.info(f"Target move {top_target_move} not better than base top move {top_base_move}: "
+                f"base win rate={base_win:.2f}%, base top win rate={base_top_win:.2f}%, games={base_games}")
     return None
