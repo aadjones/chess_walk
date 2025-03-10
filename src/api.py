@@ -9,7 +9,7 @@ from src.logger import logger
 sys.path.append("..")  # Add parent directory to path
 
 
-def get_move_stats(fen, rating):
+def get_move_stats(fen, rating, top_n=None):
     """
     Fetches move statistics for a given FEN and rating range from the Lichess Explorer API.
 
@@ -76,7 +76,9 @@ def get_move_stats(fen, rating):
             logger.warning(f"No valid move stats for {fen} at rating {rating}")
             return None, 0
 
-        sorted_moves = sorted(move_stats, key=lambda x: x["freq"], reverse=True)[:4]
+        sorted_moves = sorted(move_stats, key=lambda x: x["freq"], reverse=True)
+        if top_n:
+            sorted_moves = sorted_moves[:top_n]
         time.sleep(RATE_LIMIT_DELAY)  # Apply rate limiting
         return sorted_moves, total_games
     except (requests.RequestException, ValueError) as e:

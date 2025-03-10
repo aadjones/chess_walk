@@ -22,7 +22,7 @@ STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 TEMPERATURE = 1.0
 
 # Divergence threshold
-MIN_GAMES = 0  # Per rating band
+MIN_GAMES = 2  # Per rating band
 DIVERGENCE_THRESHOLD = 0.10  # 10%+ difference in move frequency
 
 # Add penalty settings
