@@ -1,7 +1,6 @@
 import sys
 import unittest
 from unittest.mock import patch
-
 import chess
 import pandas as pd
 
@@ -10,7 +9,6 @@ from src.walker import choose_weighted_move, generate_and_save_puzzles
 
 # Add the project root to path
 sys.path.append("..")
-
 
 def fake_get_move_stats(fen, rating):
     """
@@ -38,7 +36,6 @@ def fake_get_move_stats(fen, rating):
             100,
         )
 
-
 class TestWalker(unittest.TestCase):
     def custom_choices_factory(self, moves):
         """
@@ -46,16 +43,15 @@ class TestWalker(unittest.TestCase):
         the provided iterator.
         """
         move_iterator = iter(moves)
-
         def custom_choices(choices, weights, k):
             return [next(move_iterator)]
-
         return custom_choices
 
+    @patch("src.walker.save_puzzle_to_csv", return_value=None)
     @patch("src.walker.find_divergence")
     @patch("src.walker.random.choices")
     @patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)
-    def test_generate_and_save_puzzles_success(self, mock_get_stats, mock_choices, mock_find_divergence):
+    def test_generate_and_save_puzzles_success(self, mock_get_stats, mock_choices, mock_find_divergence, mock_save):
         """
         Qualitatively test that generate_and_save_puzzles finds at least one puzzle when
         significant divergence is detected.
@@ -94,26 +90,25 @@ class TestWalker(unittest.TestCase):
             self.assertEqual(puzzle.get("base_rating"), "1600")
             self.assertEqual(puzzle.get("target_rating"), "2000")
             # Check that the puzzle's divergence gap is at least the threshold.
-            # Calculate gap from the divergence_dict: gap = base_freq - target_freq
             expected_gap = 0.6 - (0.6 - (DIVERGENCE_THRESHOLD + delta))
             self.assertGreaterEqual(expected_gap, DIVERGENCE_THRESHOLD)
             # Also check that the ply is at least the minimum ply.
             self.assertGreaterEqual(puzzle.get("ply"), 1)
 
     @patch("src.walker.get_move_stats", side_effect=lambda fen, rating: ([], 0))
-    def test_generate_and_save_puzzles_insufficient_data(self, mock_get_stats):
+    @patch("src.walker.save_puzzle_to_csv", return_value=None)
+    def test_generate_and_save_puzzles_insufficient_data(self, mock_get_stats, mock_save):
         """
         Test that generate_and_save_puzzles returns an empty list when there is insufficient move data.
         """
         puzzles = generate_and_save_puzzles("1600", "2000", min_ply=1, max_ply=3)
         self.assertEqual(puzzles, [])
 
+    @patch("src.walker.save_puzzle_to_csv", return_value=None)
     @patch("src.walker.find_divergence")
     @patch("src.walker.random.choices")
     @patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)
-    def test_generate_and_save_puzzles_no_significant_divergence(
-        self, mock_get_stats, mock_choices, mock_find_divergence
-    ):
+    def test_generate_and_save_puzzles_no_significant_divergence(self, mock_get_stats, mock_choices, mock_find_divergence, mock_save):
         """
         Test that generate_and_save_puzzles does not add puzzles when divergence is detected but below the threshold.
         """
@@ -147,9 +142,7 @@ class TestWalker(unittest.TestCase):
         Test that choose_weighted_move uses dynamic, frequency-based weighting with temperature scaling.
         """
         temperature = 0.5
-        choose_weighted_move(
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "1600", temperature=temperature
-        )
+        choose_weighted_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "1600", temperature=temperature)
         args, kwargs = mock_choices.call_args
         choices_arg = args[0]
         weights_arg = kwargs.get("weights")
@@ -157,7 +150,6 @@ class TestWalker(unittest.TestCase):
         expected_weights = [0.36 / 0.46, 0.09 / 0.46, 0.01 / 0.46]
         for computed, expected in zip(weights_arg, expected_weights):
             self.assertAlmostEqual(computed, expected, places=3)
-
 
 if __name__ == "__main__":
     unittest.main()

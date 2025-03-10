@@ -45,7 +45,7 @@ def find_divergence(fen, base_rating, target_rating):
     base_data = [
         {
             "Move": move["uci"],
-            "Games": sum([move["white"], move["draws"], move["black"]]) if "white" in move else 0,
+            "Games": move["games_total"],
             "White %": move["win_rate"] * 100 if move.get("active_color", "w") == "w" else move["loss_rate"] * 100,
             "Draw %": move["draw_rate"] * 100,
             "Black %": move["loss_rate"] * 100 if move.get("active_color", "w") == "w" else move["win_rate"] * 100,
@@ -56,7 +56,7 @@ def find_divergence(fen, base_rating, target_rating):
     target_data = [
         {
             "Move": move["uci"],
-            "Games": sum([move["white"], move["draws"], move["black"]]) if "white" in move else 0,
+            "Games": move["games_total"],
             "White %": move["win_rate"] * 100 if move.get("active_color", "w") == "w" else move["loss_rate"] * 100,
             "Draw %": move["draw_rate"] * 100,
             "Black %": move["loss_rate"] * 100 if move.get("active_color", "w") == "w" else move["win_rate"] * 100,

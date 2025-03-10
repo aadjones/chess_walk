@@ -1,27 +1,21 @@
-import os
 import sys
+import os
 
 # Add the root directory to sys.path before any imports
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
+import pandas as pd
 import chess
 import chess.svg
-import pandas as pd
-
-from parameters import DIVERGENCE_THRESHOLD  # Import the threshold
 from src.logger import logger
-
+from parameters import DIVERGENCE_THRESHOLD
 
 def visualize_puzzles(csv_path="output/puzzles.csv", output_html="output/puzzle_visualization.html"):
     """
     Generates an HTML file visualizing the puzzles stored in the CSV with two side-by-side tables,
-    sorted by move frequency.
-
-    Args:
-        csv_path (str): Path to the CSV file containing puzzles.
-        output_html (str): Path to the output HTML file.
+    sorted by move frequency. Now includes SAN conversion for each move.
     """
     if not pd.io.common.file_exists(csv_path):
         logger.warning(f"No puzzles found at {csv_path} to visualize.")
@@ -176,7 +170,8 @@ def visualize_puzzles(csv_path="output/puzzles.csv", output_html="output/puzzle_
 
         # Create chess board visualization
         board = chess.Board(fen)
-        board_svg = chess.svg.board(board=board, size=400)
+        orientation = chess.WHITE if board.turn else chess.BLACK
+        board_svg = chess.svg.board(board=board, size=400, orientation=orientation)
 
         # Add puzzle header, metadata, and board
         html_content += f"<h2>Puzzle {puzzle_idx}</h2>"
@@ -198,28 +193,27 @@ def visualize_puzzles(csv_path="output/puzzles.csv", output_html="output/puzzle_
 
         base_freqs = {row["Move"]: row["Freq"] for _, row in base_data.iterrows()}
         target_freqs = {row["Move"]: row["Freq"] for _, row in target_data.iterrows()}
-        logger.debug(f"Base freqs: {base_freqs}")
-        logger.debug(f"Target freqs: {target_freqs}")
 
-        for _, row in base_data.iterrows():
-            move = row["Move"]
-            target_freq = target_freqs.get(move, 0)
-            freq_diff = abs(row["Freq"] - target_freq)
-            logger.debug(f"Move: {move}, Base Freq: {row['Freq']}, Target Freq: {target_freq}, Diff: {freq_diff}")
+        for _, row_data in base_data.iterrows():
+            move_uci = row_data["Move"]
+            
+            target_freq = target_freqs.get(move_uci, 0)
+            freq_diff = abs(row_data["Freq"] - target_freq)
             highlight_class = "highlight" if freq_diff >= DIVERGENCE_THRESHOLD else ""
+
             html_content += (
                 f"<tr class='{highlight_class}'>"
-                f"<td>{row['Move']}</td>"
-                f"<td>{row['Games']}</td>"
+                f"<td>{move_uci}</td>"
+                f"<td>{row_data['Games']}</td>"
                 f"<td>"
                 f"<div class='wdl-bar'>"
-                f"<div class='wdl-white' style='width: {row['White %']}%;'></div>"
-                f"<div class='wdl-draw' style='width: {row['Draw %']}%;'></div>"
-                f"<div class='wdl-black' style='width: {row['Black %']}%;'></div>"
+                f"<div class='wdl-white' style='width: {row_data['White %']}%;'></div>"
+                f"<div class='wdl-draw' style='width: {row_data['Draw %']}%;'></div>"
+                f"<div class='wdl-black' style='width: {row_data['Black %']}%;'></div>"
                 f"</div>"
-                f"<div>{row['White %']:.1f}% / {row['Draw %']:.1f}% / {row['Black %']:.1f}%</div>"
+                f"<div>{row_data['White %']:.1f}% / {row_data['Draw %']:.1f}% / {row_data['Black %']:.1f}%</div>"
                 f"</td>"
-                f"<td>{row['Freq']:.4f}</td>"
+                f"<td>{row_data['Freq']:.4f}</td>"
                 f"</tr>"
             )
         html_content += "</table></div>"
@@ -230,24 +224,26 @@ def visualize_puzzles(csv_path="output/puzzles.csv", output_html="output/puzzle_
         html_content += f"<h3>Target Cohort ({target_rating})</h3>"
         html_content += "<table>"
         html_content += "<tr><th>Move</th><th>Games</th><th>White / Draw / Black</th><th>Frequency</th></tr>"
-        for _, row in target_data.iterrows():
-            move = row["Move"]
-            base_freq = base_freqs.get(move, 0)
-            freq_diff = abs(row["Freq"] - base_freq)
+
+        for _, row_data in target_data.iterrows():
+            move_uci = row_data["Move"]
+            base_freq = base_freqs.get(move_uci, 0)
+            freq_diff = abs(row_data["Freq"] - base_freq)
             highlight_class = "highlight" if freq_diff >= DIVERGENCE_THRESHOLD else ""
+
             html_content += (
                 f"<tr class='{highlight_class}'>"
-                f"<td>{row['Move']}</td>"
-                f"<td>{row['Games']}</td>"
+                f"<td>{move_uci}</td>"
+                f"<td>{row_data['Games']}</td>"
                 f"<td>"
                 f"<div class='wdl-bar'>"
-                f"<div class='wdl-white' style='width: {row['White %']}%;'></div>"
-                f"<div class='wdl-draw' style='width: {row['Draw %']}%;'></div>"
-                f"<div class='wdl-black' style='width: {row['Black %']}%;'></div>"
+                f"<div class='wdl-white' style='width: {row_data['White %']}%;'></div>"
+                f"<div class='wdl-draw' style='width: {row_data['Draw %']}%;'></div>"
+                f"<div class='wdl-black' style='width: {row_data['Black %']}%;'></div>"
                 f"</div>"
-                f"<div>{row['White %']:.1f}% / {row['Draw %']:.1f}% / {row['Black %']:.1f}%</div>"
+                f"<div>{row_data['White %']:.1f}% / {row_data['Draw %']:.1f}% / {row_data['Black %']:.1f}%</div>"
                 f"</td>"
-                f"<td>{row['Freq']:.4f}</td>"
+                f"<td>{row_data['Freq']:.4f}</td>"
                 f"</tr>"
             )
         html_content += "</table></div>"
@@ -258,14 +254,3 @@ def visualize_puzzles(csv_path="output/puzzles.csv", output_html="output/puzzle_
     with open(output_html, "w") as f:
         f.write(html_content)
     logger.info(f"Visualizations saved to {output_html}")
-
-
-def main():
-    """
-    Main function to run the visualization script standalone.
-    """
-    visualize_puzzles()
-
-
-if __name__ == "__main__":
-    main()
