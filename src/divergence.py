@@ -1,10 +1,13 @@
-from parameters import DIVERGENCE_THRESHOLD, MIN_GAMES
 import sys
 
+import pandas as pd
+
+from parameters import DIVERGENCE_THRESHOLD, MIN_GAMES
 from src.api import get_move_stats
 from src.logger import logger
 
 sys.path.append("..")  # Add parent directory to path
+
 
 def find_divergence(fen, base_rating, target_rating):
     """
@@ -16,7 +19,7 @@ def find_divergence(fen, base_rating, target_rating):
         target_rating (str): Higher rating band
 
     Returns:
-        dict: Puzzle data if divergence found, None otherwise
+        dict: DataFrame-compatible data and metadata if divergence found, None otherwise
     """
     logger.info(f"Analyzing position for divergence between ratings {base_rating} and {target_rating}")
     logger.debug(f"Position: {fen}")
@@ -25,6 +28,7 @@ def find_divergence(fen, base_rating, target_rating):
     target_moves, target_total = get_move_stats(fen, target_rating)
 
     if not base_moves or not target_moves:
+        logger.warning(f"No moves data for {fen} at rating {base_rating if not base_moves else target_rating}")
         logger.warning("Missing move data for at least one rating band")
         return None
 
@@ -32,38 +36,68 @@ def find_divergence(fen, base_rating, target_rating):
         logger.warning(f"Insufficient games: base={base_total}, target={target_total}, min required={MIN_GAMES}")
         return None
 
-    # Extract move data from dictionaries
-    base_dict = {move["uci"]: move["freq"] for move in base_moves}  # {uci: freq}
-    target_dict = {move["uci"]: move["freq"] for move in target_moves}  # {uci: freq}
+    # Log raw move data for debugging
+    logger.debug(f"Base moves (rating {base_rating}): {base_moves}")
+    logger.debug(f"Target moves (rating {target_rating}): {target_moves}")
+    logger.debug(f"Base total games: {base_total}, Target total games: {target_total}")
 
-    # Sort moves by frequency in descending order
-    sorted_base_moves = sorted(base_moves, key=lambda x: x["freq"], reverse=True)
-    sorted_target_moves = sorted(target_moves, key=lambda x: x["freq"], reverse=True)
+    # Prepare data for DataFrame
+    base_data = [
+        {
+            "Move": move["uci"],
+            "Games": sum([move["white"], move["draws"], move["black"]]) if "white" in move else 0,
+            "White %": move["win_rate"] * 100 if move.get("active_color", "w") == "w" else move["loss_rate"] * 100,
+            "Draw %": move["draw_rate"] * 100,
+            "Black %": move["loss_rate"] * 100 if move.get("active_color", "w") == "w" else move["win_rate"] * 100,
+            "Freq": move["freq"],  # Store the raw frequency for consistency
+        }
+        for move in base_moves
+    ]
+    target_data = [
+        {
+            "Move": move["uci"],
+            "Games": sum([move["white"], move["draws"], move["black"]]) if "white" in move else 0,
+            "White %": move["win_rate"] * 100 if move.get("active_color", "w") == "w" else move["loss_rate"] * 100,
+            "Draw %": move["draw_rate"] * 100,
+            "Black %": move["loss_rate"] * 100 if move.get("active_color", "w") == "w" else move["win_rate"] * 100,
+            "Freq": move["freq"],  # Store the raw frequency for consistency
+        }
+        for move in target_moves
+    ]
 
-    # Extract top moves for both ratings
-    top_base_move = sorted_base_moves[0]["uci"] if sorted_base_moves else None
-    top_target_move = sorted_target_moves[0]["uci"] if sorted_target_moves else None
+    base_df = pd.DataFrame(base_data)
+    target_df = pd.DataFrame(target_data)
 
-    # Create arrays of moves and frequencies
-    base_top_moves = [move["uci"] for move in sorted_base_moves]
-    base_freqs = [move["freq"] for move in sorted_base_moves]
-    base_wdls = [(m["win_rate"], m["draw_rate"], m["loss_rate"]) for m in base_moves]
-    target_top_moves = [move["uci"] for move in sorted_target_moves]
-    target_freqs = [move["freq"] for move in sorted_target_moves]
-    target_wdls = [(m["win_rate"], m["draw_rate"], m["loss_rate"]) for m in target_moves]
+    # Log DataFrames for debugging
+    logger.debug(f"Base DataFrame:\n{base_df}")
+    logger.debug(f"Target DataFrame:\n{target_df}")
 
-    # Get the top move frequencies
-    base_freq = base_dict.get(top_base_move, 0)
-    target_freq_of_base_move = target_dict.get(top_base_move, 0)
+    # Validate using total games instead of Games sum
+    if base_df["Freq"].sum() == 0 or target_df["Freq"].sum() == 0:
+        logger.warning(
+            f"No frequency data: base_freq_sum={base_df['Freq'].sum()}, target_freq_sum={target_df['Freq'].sum()}"
+        )
+        return None
+
+    # Extract top moves for divergence check
+    base_df = base_df.sort_values(by="Freq", ascending=False)
+    target_df = target_df.sort_values(by="Freq", ascending=False)
+
+    top_base_move = base_df.iloc[0]["Move"] if not base_df.empty else None
+    top_target_move = target_df.iloc[0]["Move"] if not target_df.empty else None
+
+    base_freq = base_df.iloc[0]["Freq"]
+    target_freq_of_base_move = (
+        target_df[target_df["Move"] == top_base_move]["Freq"].iloc[0]
+        if top_base_move in target_df["Move"].values
+        else 0
+    )
 
     logger.info(f"Top base move: {top_base_move} (Base: {base_freq:.2f}, Target: {target_freq_of_base_move:.2f})")
-    logger.info(f"Top target move: {top_target_move} ({target_dict.get(top_target_move, 0):.2f})")
+    logger.info(f"Top target move: {top_target_move} ({target_df.iloc[0]['Freq']:.2f})")
 
-    # First check if the top moves are different
     if top_base_move != top_target_move:
-        # Calculate how much less frequently the base's top move is played in the target rating
         diff = base_freq - target_freq_of_base_move
-
         logger.debug(f"Move frequency difference: {diff:.2f} (threshold: {DIVERGENCE_THRESHOLD})")
 
         if diff >= DIVERGENCE_THRESHOLD:
@@ -72,12 +106,10 @@ def find_divergence(fen, base_rating, target_rating):
             )
             return {
                 "fen": fen,
-                "base_top_moves": base_top_moves,
-                "base_freqs": base_freqs,
-                "base_wdls": base_wdls,
-                "target_top_moves": target_top_moves,
-                "target_freqs": target_freqs,
-                "target_wdls": target_wdls,
+                "base_rating": base_rating,
+                "target_rating": target_rating,
+                "base_df": base_df,
+                "target_df": target_df,
             }
     else:
         logger.info("No divergence - same top move in both rating bands")

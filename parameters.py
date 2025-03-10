@@ -1,23 +1,25 @@
 # Rating bands
 
-# According to the documentation, the ratings parameter accepts values from this enum:
-# 0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500.
+# Valid rating values for the API (from documentation)
 # Each value represents a range (e.g., 1400 means 1400-1599, 1600 means 1600-1799, etc.).
+VALID_RATINGS = ["0", "1000", "1200", "1400", "1600", "1800", "2000", "2200", "2500"]
 
-# Using comma-separated values instead of ranges
 BASE_RATING = "2000"
 TARGET_RATING = "2500"
 RATING_GAP = 500
-
-# Valid rating values for the API (from documentation)
-VALID_RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500]
 
 # Ply range
 MIN_PLY = 4
 MAX_PLY = 20
 
-# Move weights (top 4 moves)
-MOVE_WEIGHTS = [0.5, 0.3, 0.15, 0.05]  # Sum to 1.0, bias toward top moves
+# Starting FEN
+# Configure this to start from different possible positions
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+# Temperature for move selection
+# If temperature > 1, the distribution flattens (more randomness)
+# If temperature < 1, the distribution sharpens (more deterministic)
+TEMPERATURE = 1.0
 
 # Divergence threshold
 MIN_GAMES = 0  # Per rating band
@@ -29,6 +31,3 @@ PENALTY_PER_PLY = 0.02  # Decrease threshold by 2% per ply
 # API settings
 API_BASE = "https://explorer.lichess.ovh/lichess"
 RATE_LIMIT_DELAY = 1.0  # Seconds between calls
-
-# Lichess study ID
-STUDY_ID = "9EZJf2B0"

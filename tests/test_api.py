@@ -1,4 +1,3 @@
-import urllib.parse
 from unittest.mock import patch
 
 import requests
@@ -8,6 +7,7 @@ from src.api import get_move_stats
 
 # Define a constant for the valid FEN string
 VALID_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
 
 def test_get_move_stats_success():
     """Test successful API call with standard response"""
@@ -39,6 +39,7 @@ def test_get_move_stats_success():
         params = kwargs.get("params", {})
         assert "ratings" in params and params["ratings"] == "1400,1600"
 
+
 def test_get_move_stats_comma_rating():
     """Test handling of comma-separated rating format"""
     mock_response = {
@@ -60,6 +61,7 @@ def test_get_move_stats_comma_rating():
         params = kwargs.get("params", {})
         assert "ratings" in params and params["ratings"] == "1400,1600"
 
+
 def test_get_move_stats_http_error():
     """Test handling of HTTP errors"""
     with patch("requests.get") as mock_get:
@@ -71,6 +73,7 @@ def test_get_move_stats_http_error():
         assert moves is None
         assert total == 0
 
+
 def test_get_move_stats_request_exception():
     """Test handling of request exceptions"""
     with patch("requests.get") as mock_get:
@@ -80,6 +83,7 @@ def test_get_move_stats_request_exception():
 
         assert moves is None
         assert total == 0
+
 
 def test_get_move_stats_json_error():
     """Test handling of JSON parsing errors"""
@@ -91,6 +95,7 @@ def test_get_move_stats_json_error():
 
         assert moves is None
         assert total == 0
+
 
 def test_get_move_stats_empty_response():
     """Test handling of valid response with no moves"""
@@ -105,6 +110,7 @@ def test_get_move_stats_empty_response():
         assert moves is None
         assert total == 0
 
+
 def test_get_move_stats_no_games():
     """Test handling of valid response but zero games"""
     mock_response = {"moves": [{"uci": "e2e4", "white": 0, "black": 0, "draws": 0}], "white": 0, "black": 0, "draws": 0}
@@ -117,6 +123,7 @@ def test_get_move_stats_no_games():
 
         assert moves is None
         assert total == 0
+
 
 def test_get_move_stats_rate_limit():
     """Test that rate limiting delay is applied"""
@@ -135,6 +142,7 @@ def test_get_move_stats_rate_limit():
 
         # Verify that sleep was called for rate limiting
         mock_sleep.assert_called_once_with(RATE_LIMIT_DELAY)
+
 
 def test_get_move_stats_url_construction():
     """Test that the API URL is constructed correctly with proper encoding"""

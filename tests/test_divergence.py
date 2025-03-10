@@ -1,7 +1,7 @@
-from parameters import DIVERGENCE_THRESHOLD, MIN_GAMES
 import sys
 from unittest.mock import patch
 
+from parameters import DIVERGENCE_THRESHOLD, MIN_GAMES
 from src.divergence import find_divergence
 
 sys.path.append("..")  # Add parent directory to path
@@ -16,31 +16,44 @@ DEFAULT_TARGET_MOVES = [
     {"uci": "e2e4", "freq": 0.1, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
 ]
 
+
 def test_find_divergence():
     with patch("src.divergence.get_move_stats") as mock_stats:
         mock_stats.side_effect = [(DEFAULT_BASE_MOVES, 1000), (DEFAULT_TARGET_MOVES, 1000)]
         result = find_divergence("fake_fen", "1400-1600", "1800-2000")
         assert result is not None
-        # Verify that the top moves are correctly determined
-        assert result["base_top_moves"][0] == "e2e4"
-        assert result["target_top_moves"][0] == "g1f3"
+        # Check that the top base move in the DataFrame is e2e4
+        top_base_move = result["base_df"].iloc[0]["Move"]
+        top_target_move = result["target_df"].iloc[0]["Move"]
+        assert top_base_move == "e2e4"
+        assert top_target_move == "g1f3"
         # Calculate the frequency difference for the top base move
-        diff = DEFAULT_BASE_MOVES[0]["freq"] - next((m["freq"] for m in DEFAULT_TARGET_MOVES if m["uci"] == "e2e4"), 0)
+        base_freq = result["base_df"].iloc[0]["Freq"]
+        # Find the frequency of the base top move in target data (if it appears)
+        target_freq_of_base_move = result["target_df"][result["target_df"]["Move"] == top_base_move]["Freq"]
+        target_freq_of_base_move = target_freq_of_base_move.iloc[0] if not target_freq_of_base_move.empty else 0
+        diff = base_freq - target_freq_of_base_move
         assert diff >= DIVERGENCE_THRESHOLD
+
 
 def test_find_divergence_different_top_moves():
     with patch("src.divergence.get_move_stats") as mock_stats:
         mock_stats.side_effect = [(DEFAULT_BASE_MOVES, 1000), (DEFAULT_TARGET_MOVES, 1000)]
         result = find_divergence("fake_fen", "1400-1600", "1800-2000")
         assert result is not None
-        assert result["base_top_moves"][0] == "e2e4"
-        assert result["target_top_moves"][0] == "g1f3"
+        top_base_move = result["base_df"].iloc[0]["Move"]
+        top_target_move = result["target_df"].iloc[0]["Move"]
+        assert top_base_move == "e2e4"
+        assert top_target_move == "g1f3"
         assert result["fen"] == "fake_fen"
-        # Check that all moves appear in the arrays
-        assert "e2e4" in result["base_top_moves"]
-        assert "g1f3" in result["base_top_moves"]
-        assert "e2e4" in result["target_top_moves"]
-        assert "g1f3" in result["target_top_moves"]
+        # Check that both moves appear in the respective DataFrames
+        base_moves = result["base_df"]["Move"].tolist()
+        target_moves = result["target_df"]["Move"].tolist()
+        assert "e2e4" in base_moves
+        assert "g1f3" in base_moves
+        assert "e2e4" in target_moves
+        assert "g1f3" in target_moves
+
 
 def test_find_divergence_same_top_move():
     # When both ratings yield the same top move, the function should return None
@@ -52,6 +65,7 @@ def test_find_divergence_same_top_move():
         mock_stats.side_effect = [(same_moves, 1000), (same_moves, 1000)]
         result = find_divergence("fake_fen", "1400-1600", "1800-2000")
         assert result is None
+
 
 def test_find_divergence_below_threshold():
     # Using a small epsilon so the frequency difference is just below the threshold.
@@ -78,12 +92,14 @@ def test_find_divergence_below_threshold():
         # Since the frequency difference is below the threshold, we expect no divergence to be found.
         assert result is None
 
+
 def test_find_divergence_insufficient_games():
     # Test when there are not enough games for the base rating - should return None
     with patch("src.divergence.get_move_stats") as mock_stats:
         mock_stats.side_effect = [(DEFAULT_BASE_MOVES, MIN_GAMES - 1), (DEFAULT_TARGET_MOVES, 1000)]
         result = find_divergence("fake_fen", "1400-1600", "1800-2000")
         assert result is None
+
 
 def test_find_divergence_missing_data():
     # Test when move data is missing for both rating bands - should return None

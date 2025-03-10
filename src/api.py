@@ -1,12 +1,13 @@
-from parameters import API_BASE, RATE_LIMIT_DELAY, MIN_GAMES
 import sys
 import time
-import urllib.parse
+
 import requests
 
+from parameters import MIN_GAMES, RATE_LIMIT_DELAY
 from src.logger import logger
 
 sys.path.append("..")  # Add parent directory to path
+
 
 def get_move_stats(fen, rating):
     """
@@ -22,27 +23,21 @@ def get_move_stats(fen, rating):
     # Convert rating to Lichess API format (e.g., "1400-1600" -> "1400,1600")
     if "-" in rating:
         rating = rating.replace("-", ",")
-    
+
     # Validate FEN (basic check for minimum fields)
     fen_fields = fen.split()
     if len(fen_fields) < 6:
         logger.warning(f"Invalid FEN string: {fen}")
         return None, 0
-    
+
     active_color = fen_fields[1]  # Extract active color (second field)
     if active_color not in ["w", "b"]:
         logger.warning(f"Invalid active color in FEN: {fen}")
         return None, 0
 
     url = "https://explorer.lichess.ovh/lichess"
-    params = {
-        "fen": fen,
-        "ratings": rating,
-        "variant": "standard",
-        "speeds": "blitz,rapid,classical",
-        "topGames": 0
-    }
-    
+    params = {"fen": fen, "ratings": rating, "variant": "standard", "speeds": "blitz,rapid,classical", "topGames": 0}
+
     try:
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()  # This will raise RequestException for HTTP errors (e.g., 404)
@@ -51,12 +46,12 @@ def get_move_stats(fen, rating):
         if not moves:
             logger.warning(f"No moves data for {fen} at rating {rating}")
             return None, 0
-        
+
         total_games = sum(m["white"] + m["draws"] + m["black"] for m in moves)
         if total_games < MIN_GAMES:
             logger.warning(f"Insufficient games ({total_games}) for {fen} at rating {rating}")
             return None, 0
-        
+
         move_stats = []
         for move in moves:
             total = move["white"] + move["draws"] + move["black"]
@@ -64,18 +59,20 @@ def get_move_stats(fen, rating):
                 win_rate = move["white"] / total if active_color == "w" else move["black"] / total
                 draw_rate = move["draws"] / total
                 loss_rate = move["black"] / total if active_color == "w" else move["white"] / total
-                move_stats.append({
-                    "uci": move["uci"],
-                    "freq": total / total_games,
-                    "win_rate": win_rate,
-                    "draw_rate": draw_rate,
-                    "loss_rate": loss_rate
-                })
-        
+                move_stats.append(
+                    {
+                        "uci": move["uci"],
+                        "freq": total / total_games,
+                        "win_rate": win_rate,
+                        "draw_rate": draw_rate,
+                        "loss_rate": loss_rate,
+                    }
+                )
+
         if not move_stats:  # If no valid moves after processing
             logger.warning(f"No valid move stats for {fen} at rating {rating}")
             return None, 0
-        
+
         sorted_moves = sorted(move_stats, key=lambda x: x["freq"], reverse=True)[:4]
         time.sleep(RATE_LIMIT_DELAY)  # Apply rate limiting
         return sorted_moves, total_games
