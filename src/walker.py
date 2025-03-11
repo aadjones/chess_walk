@@ -111,10 +111,12 @@ def create_puzzle_data(divergence: dict, base_rating: str, target_rating: str, p
     Returns:
         dict: Puzzle data dictionary.
     """
+    cohort_pair = f"{base_rating}-{target_rating}"
     return {
         "fen": divergence["fen"],
         "base_rating": base_rating,
         "target_rating": target_rating,
+        "CohortPair": cohort_pair,
         "ply": ply,
         "base_top_moves": divergence["base_df"]["Move"].tolist(),
         "base_freqs": divergence["base_df"]["Freq"].tolist(),
@@ -154,17 +156,21 @@ def build_puzzle_dataframe(
     Returns:
         pd.DataFrame: Combined DataFrame with base and target cohort data, indexed by Cohort, Row, and PuzzleIdx.
     """
+    cohort_pair = f"{base_rating}-{target_rating}"
+
     base_df = divergence["base_df"].assign(
         FEN=fen,
         Rating=base_rating,
         PuzzleIdx=puzzle_idx,
         Ply=ply,
+        CohortPair=cohort_pair,
     )
     target_df = divergence["target_df"].assign(
         FEN=fen,
         Rating=target_rating,
         PuzzleIdx=puzzle_idx,
         Ply=ply,
+        CohortPair=cohort_pair,
     )
     puzzle_df = pd.concat([base_df, target_df], keys=["base", "target"])
     puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
@@ -175,55 +181,60 @@ def build_puzzle_dataframe(
 def save_puzzle_to_csv(puzzle_df: pd.DataFrame, output_path: str = "output/puzzles.csv"):
     """
     Saves the puzzle DataFrame to a CSV file, appending to existing data if it exists,
-    and skipping rows with duplicate FENs.
+    and skipping rows with duplicate FENs (for the same CohortPair).
 
     Args:
         puzzle_df (pd.DataFrame): DataFrame containing puzzle data.
         output_path (str): Path to the output CSV file.
     """
+    # If the incoming DataFrame already has PuzzleIdx in its index, reset it (dropping it)
+    if "PuzzleIdx" in puzzle_df.index.names:
+        puzzle_df = puzzle_df.reset_index(level="PuzzleIdx", drop=True)
+
     if os.path.exists(output_path):
         try:
             existing_df = pd.read_csv(output_path, index_col=[0, 1, 2])
             max_existing_idx = existing_df.index.get_level_values("PuzzleIdx").max() if not existing_df.empty else -1
             logger.debug(f"Max existing PuzzleIdx: {max_existing_idx}")
-            # Adjust puzzle_idx to continue from the highest existing index
             puzzle_idx = max_existing_idx + 1
 
-            # Reset index to allow modification of PuzzleIdx
-            puzzle_df = puzzle_df.reset_index(level="PuzzleIdx")
+            # Reset index for new data: since puzzle_df no longer has PuzzleIdx as a column,
+            # add it now.
             puzzle_df["PuzzleIdx"] = puzzle_idx
             puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
             puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
 
-            # Check for duplicate FENs
-            if not existing_df.empty and "FEN" in existing_df.columns and "FEN" in puzzle_df.columns:
-                # Identify rows with FENs already in existing_df
-                duplicate_mask = puzzle_df["FEN"].isin(existing_df["FEN"])
+            # Check for duplicate FENs within the same CohortPair
+            if not existing_df.empty and "FEN" in existing_df.columns and "CohortPair" in existing_df.columns:
+                duplicate_mask = puzzle_df.apply(
+                    lambda row: (
+                        (existing_df["FEN"] == row["FEN"]) & (existing_df["CohortPair"] == row["CohortPair"])
+                    ).any(),
+                    axis=1,
+                )
                 if duplicate_mask.any():
                     duplicate_fens = puzzle_df.loc[duplicate_mask, "FEN"].unique()
-                    logger.info(f"Skipping {len(duplicate_fens)} rows with duplicate FENs: {duplicate_fens}")
-                    puzzle_df = puzzle_df[~duplicate_mask]  # Keep only non-duplicate rows
-
-            # Concatenate only if there are rows to add
+                    logger.info(
+                        f"Skipping {len(duplicate_fens)} rows with duplicate FENs in the same cohort pair: {duplicate_fens}"
+                    )
+                    puzzle_df = puzzle_df[~duplicate_mask]
+            # Concatenate new rows if any remain
             if not puzzle_df.empty:
                 puzzle_df = pd.concat([existing_df, puzzle_df])
             else:
-                puzzle_df = existing_df  # No new rows to add, use existing data
+                puzzle_df = existing_df
         except Exception as e:
             logger.warning(f"Error loading existing puzzles.csv: {e}. Overwriting.")
-            puzzle_idx = 0
-            puzzle_df = puzzle_df.reset_index(level="PuzzleIdx")
-            puzzle_df["PuzzleIdx"] = puzzle_idx
+            puzzle_df = puzzle_df.copy()
+            puzzle_df["PuzzleIdx"] = 0
             puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
             puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
     else:
-        # If file doesn't exist, set initial PuzzleIdx and index
-        puzzle_df = puzzle_df.reset_index(level="PuzzleIdx")
+        # File does not exist: assign initial PuzzleIdx 0.
+        puzzle_df = puzzle_df.copy()
         puzzle_df["PuzzleIdx"] = 0
         puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
         puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
-
-    # Save to CSV
     puzzle_df.to_csv(output_path)
     logger.debug(
         f"After saving, puzzles.csv has {len(puzzle_df.index.get_level_values('PuzzleIdx').unique())} unique PuzzleIdx values."

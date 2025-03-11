@@ -6,7 +6,11 @@ import chess
 import pandas as pd
 import pytest
 
-from src.walker import choose_weighted_move, generate_and_save_puzzles
+from src.walker import (
+    choose_weighted_move,
+    create_puzzle_data,
+    generate_and_save_puzzles,
+)
 
 # Add the project root to path
 sys.path.append("..")
@@ -37,6 +41,35 @@ def fake_get_move_stats(fen: str, rating: str) -> tuple[list[dict], int]:
             ],
             100,
         )
+
+
+def test_create_puzzle_data_includes_cohort_pair():
+    base_rating = "1200"
+    target_rating = "1600"
+    fake_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+    # Create fake DataFrames simulating divergence data for base and target cohorts.
+    base_df = pd.DataFrame([{"Move": "e2e4", "Freq": 0.6, "White %": 50, "Draw %": 30, "Black %": 20}])
+    target_df = pd.DataFrame([{"Move": "e2e4", "Freq": 0.4, "White %": 50, "Draw %": 30, "Black %": 20}])
+
+    # Fake divergence dictionary. (Include any other keys your real function expects.)
+    fake_divergence = {
+        "fen": fake_fen,
+        "base_df": base_df,
+        "target_df": target_df,
+    }
+
+    # Call create_puzzle_data with a given ply (for example, 5)
+    puzzle_data = create_puzzle_data(fake_divergence, base_rating, target_rating, ply=5)
+
+    # The expected CohortPair is the combination of base and target ratings.
+    expected_cohort_pair = f"{base_rating}-{target_rating}"
+
+    # Check that the returned puzzle data includes a CohortPair key with the correct value.
+    assert "CohortPair" in puzzle_data, "Puzzle data should include a 'CohortPair' key."
+    assert (
+        puzzle_data["CohortPair"] == expected_cohort_pair
+    ), f"Expected CohortPair '{expected_cohort_pair}', got '{puzzle_data['CohortPair']}'"
 
 
 def custom_choices_factory(moves: list[str]) -> Callable[[list[str], list[float], int], list[str]]:

@@ -1,11 +1,10 @@
 # Rating bands
-
 # Valid rating values for the API (from documentation)
 # Each value represents a range (e.g., 1400 means 1400-1599, 1600 means 1600-1799, etc.).
 VALID_RATINGS = ["0", "1000", "1200", "1400", "1600", "1800", "2000", "2200", "2500"]
 
-BASE_RATING = "1200"
-TARGET_RATING = "1600"
+BASE_RATING = "2000"
+TARGET_RATING = "2500"
 # Ply range
 MIN_PLY = 4
 MAX_PLY = 20
