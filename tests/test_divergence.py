@@ -1,84 +1,150 @@
-from parameters import DIVERGENCE_THRESHOLD, MIN_GAMES
-import sys
 from unittest.mock import patch
 
-from src.divergence import find_divergence
+import pandas as pd
+import pytest
 
-sys.path.append("..")  # Add parent directory to path
+from src.divergence import (
+    build_move_df,
+    check_frequency_divergence,
+    check_win_rate_difference,
+    find_divergence,
+)
 
-# Define default move lists for use in multiple tests
-DEFAULT_BASE_MOVES = [("e2e4", 0.6), ("g1f3", 0.3)]
-DEFAULT_TARGET_MOVES = [("g1f3", 0.8), ("e2e4", 0.1)]
+MIN_GAMES = 50
+
+BASE_MOVES = [
+    {"uci": "f1b5", "games_total": 18337, "win_rate": 0.4341, "draw_rate": 0.0613, "loss_rate": 0.5046, "freq": 0.4528},
+    {"uci": "f1e2", "games_total": 12013, "win_rate": 0.4724, "draw_rate": 0.0798, "loss_rate": 0.4478, "freq": 0.2966},
+]
+TARGET_MOVES = [
+    {"uci": "f1e2", "games_total": 309, "win_rate": 0.6000, "draw_rate": 0.1000, "loss_rate": 0.3000, "freq": 0.4003},
+    {"uci": "f1b5", "games_total": 267, "win_rate": 0.4419, "draw_rate": 0.1311, "loss_rate": 0.4270, "freq": 0.3459},
+]
+
+pd.set_option("future.no_silent_downcasting", True)
 
 
-def test_find_divergence():
-    with patch("src.divergence.get_move_stats") as mock_stats:
-        mock_stats.side_effect = [(DEFAULT_BASE_MOVES, 1000), (DEFAULT_TARGET_MOVES, 1000)]
-        result = find_divergence("fake_fen", "1400-1600", "1800-2000")
+def test_build_move_df():
+    """
+    Test that the build_move_df function correctly builds a DataFrame from the move data.
+    """
+    df = build_move_df(BASE_MOVES)
+    assert len(df) == 2
+    assert "f1b5" in df["Move"].values
+    assert df["White %"].max() > 0
+
+
+def test_frequency_divergence_significant():
+    """
+    Test that the check_frequency_divergence function correctly identifies significant frequency divergence.
+    """
+    base_df = build_move_df(BASE_MOVES)
+    target_df = build_move_df(TARGET_MOVES)
+    differs, _ = check_frequency_divergence(base_df, target_df)
+    assert differs
+
+
+def test_frequency_divergence_insignificant():
+    """
+    Test that the check_frequency_divergence function correctly identifies insignificant frequency divergence.
+    """
+    same_moves = [{"uci": "f1b5", "games_total": 100, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2, "freq": 0.5}]
+    base_df = build_move_df(same_moves)
+    target_df = build_move_df(same_moves)
+    differs, _ = check_frequency_divergence(base_df, target_df)
+    assert not differs
+
+
+def test_win_rate_difference_significant():
+    """
+    Test that the check_win_rate_difference function correctly identifies significant win rate difference.
+    """
+    base_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [40.0]})
+    target_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [50.0]})
+    better, _ = check_win_rate_difference(base_df, target_df, "f1e2")
+    assert better
+
+
+def test_win_rate_difference_insignificant():
+    """
+    Test that the check_win_rate_difference function correctly identifies insignificant win rate difference.
+    """
+    base_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [47.0]})
+    target_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [48.0]})
+    better, _ = check_win_rate_difference(base_df, target_df, "f1e2")
+    assert not better
+
+
+def test_win_rate_difference_insufficient_data():
+    """
+    Test that the check_win_rate_difference function correctly handles insufficient data.
+    """
+    base_df = pd.DataFrame({"Move": ["f1e2"], "Games": [2], "White %": [50.0]})
+    target_df = pd.DataFrame({"Move": ["f1e2"], "Games": [100], "White %": [60.0]})
+    better, p_value = check_win_rate_difference(base_df, target_df, "f1e2")
+    assert not better
+    assert p_value is None
+
+
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_significant(caplog):
+    """
+    Test that the find_divergence function correctly identifies significant divergence.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        mock_get_move_stats.side_effect = [
+            (BASE_MOVES, sum(m["games_total"] for m in BASE_MOVES)),
+            (TARGET_MOVES, sum(m["games_total"] for m in TARGET_MOVES)),
+        ]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
         assert result is not None
-        # Verify that the top moves are correctly determined
-        assert result["base_top_moves"][0] == "e2e4"
-        assert result["target_top_moves"][0] == "g1f3"
-        # Calculate the frequency difference for the top base move
-        diff = DEFAULT_BASE_MOVES[0][1] - dict(DEFAULT_TARGET_MOVES).get(DEFAULT_BASE_MOVES[0][0], 0)
-        assert diff >= DIVERGENCE_THRESHOLD
+        assert result["top_base_move"] != result["top_target_move"]
+        assert "Divergence detected" in caplog.text  # Updated to match new log message
 
 
-def test_find_divergence_different_top_moves():
-    with patch("src.divergence.get_move_stats") as mock_stats:
-        mock_stats.side_effect = [(DEFAULT_BASE_MOVES, 1000), (DEFAULT_TARGET_MOVES, 1000)]
-        result = find_divergence("fake_fen", "1400-1600", "1800-2000")
-        assert result is not None
-        assert result["base_top_moves"][0] == "e2e4"
-        assert result["target_top_moves"][0] == "g1f3"
-        assert result["fen"] == "fake_fen"
-        # Check that all moves appear in the arrays
-        assert "e2e4" in result["base_top_moves"]
-        assert "g1f3" in result["base_top_moves"]
-        assert "e2e4" in result["target_top_moves"]
-        assert "g1f3" in result["target_top_moves"]
-
-
-def test_find_divergence_same_top_move():
-    # When both ratings yield the same top move, the function should return None
-    same_moves = [("e2e4", 0.6), ("g1f3", 0.3)]
-    with patch("src.divergence.get_move_stats") as mock_stats:
-        mock_stats.side_effect = [(same_moves, 1000), (same_moves, 1000)]
-        result = find_divergence("fake_fen", "1400-1600", "1800-2000")
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_no_divergence(caplog):
+    """
+    Test that the find_divergence function correctly identifies no divergence.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        same_moves = [
+            {"uci": "f1b5", "games_total": 100, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2, "freq": 0.5}
+        ]
+        mock_get_move_stats.side_effect = [
+            (same_moves, sum(m["games_total"] for m in same_moves)),
+            (same_moves, sum(m["games_total"] for m in same_moves)),
+        ]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
         assert result is None
 
 
-def test_find_divergence_below_threshold():
-    # Using a small epsilon so the frequency difference is just below the threshold.
-    epsilon = 0.01
-
-    # Base move data: "e2e4" is the top move with frequency 0.6.
-    base_moves = [("e2e4", 0.6), ("g1f3", 0.3)]
-
-    # Calculate the target frequency for "e2e4" such that the difference is (DIVERGENCE_THRESHOLD - epsilon).
-    target_e2e4_freq = 0.6 - (DIVERGENCE_THRESHOLD - epsilon)
-    # Ensure that the top target move is different, e.g. "g1f3" has a frequency higher than target_e2e4_freq.
-    target_moves = [("g1f3", 0.7), ("e2e4", target_e2e4_freq)]
-
-    with patch("src.divergence.get_move_stats") as mock_stats:
-        # Both rating bands have sufficient game counts.
-        mock_stats.side_effect = [(base_moves, 1000), (target_moves, 1000)]
-        result = find_divergence("fake_fen", "1400-1600", "1800-2000")
-        # Since the frequency difference is below the threshold, we expect no divergence to be found.
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_insufficient_games(caplog):
+    """
+    Test that the find_divergence function correctly handles insufficient games.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        mock_get_move_stats.side_effect = [
+            (BASE_MOVES, 1),  # Below MIN_GAMES
+            (TARGET_MOVES, sum(m["games_total"] for m in TARGET_MOVES)),
+        ]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
         assert result is None
+        assert "Insufficient games" in caplog.text
 
 
-def test_find_divergence_insufficient_games():
-    # Test when there are not enough games for the base rating - should return None
-    with patch("src.divergence.get_move_stats") as mock_stats:
-        mock_stats.side_effect = [(DEFAULT_BASE_MOVES, MIN_GAMES - 1), (DEFAULT_TARGET_MOVES, 1000)]
-        result = find_divergence("fake_fen", "1400-1600", "1800-2000")
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_no_data(caplog):
+    """
+    Test that the find_divergence function correctly handles no data.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        mock_get_move_stats.side_effect = [(None, 0), (TARGET_MOVES, sum(m["games_total"] for m in TARGET_MOVES))]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
         assert result is None
-
-
-def test_find_divergence_missing_data():
-    # Test when move data is missing for both rating bands - should return None
-    with patch("src.divergence.get_move_stats") as mock_stats:
-        mock_stats.side_effect = [([], 0), ([], 0)]
-        result = find_divergence("fake_fen", "1400-1600", "1800-2000")
-        assert result is None
+        assert "No moves data" in caplog.text

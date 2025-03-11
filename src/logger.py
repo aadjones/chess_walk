@@ -1,4 +1,5 @@
 import logging
+import logging.handlers
 import os
 import sys
 from datetime import datetime
@@ -10,9 +11,21 @@ if not os.path.exists(logs_dir):
 
 
 # Set up logging
-def setup_logger():
+def setup_logger() -> logging.Logger:
+    """
+    Set up a logger with a memory handler to store recent logs and a file handler to save logs to a file.
+    Returns:
+        logging.Logger: The configured logger.
+    """
     logger = logging.getLogger("chess_divergence")
     logger.setLevel(logging.DEBUG)
+
+    # Memory handler to store recent logs
+    memory_handler = logging.handlers.MemoryHandler(capacity=100)  # Store last 100 log records
+    memory_handler.setLevel(logging.DEBUG)
+    memory_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    memory_handler.setFormatter(memory_format)
+    logger.addHandler(memory_handler)
 
     # File handler for debug and above
     log_filename = os.path.join(logs_dir, f'chess_divergence_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')

@@ -32,10 +32,18 @@ Edit the parameters in ```parameters.py``` to taste.
 Then, from the project root, run
 
 ```python
-python main.py --num_walks 5
+python scripts/generate_puzzles.py --num_walks 3
 ```
 
-This will take 5 walks to scrape puzzles. It then builds the file output/puzzles.json as well as the website output/puzzles.html. View the site with a local server to browse through the puzzles.
+This will take 3 walks to scrape puzzles. It then builds the file output/puzzles.csv.
+
+Next, to visualize the results, from the project root, run
+
+```bash
+streamlit run ui/streamlit_app.py
+```
+
+This will build a data visualization based on the data scraped from your ```generate_puzzles.py``` script.
 
 ## Development
 
