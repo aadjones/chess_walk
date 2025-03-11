@@ -21,8 +21,6 @@ TARGET_MOVES = [
     {"uci": "f1b5", "games_total": 267, "win_rate": 0.4419, "draw_rate": 0.1311, "loss_rate": 0.4270, "freq": 0.3459},
 ]
 
-pd.set_option("future.no_silent_downcasting", True)
-
 
 def test_build_move_df():
     """
