@@ -1,12 +1,13 @@
 import argparse
 import os
+import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pandas as pd
 from dotenv import load_dotenv
 
 from parameters import BASE_RATING, TARGET_RATING
 from src.logger import logger
-from src.visualize import visualize_puzzles
 from src.walker import generate_and_save_puzzles
 
 load_dotenv()  # Load variables from .env file
@@ -15,19 +16,19 @@ load_dotenv()  # Load variables from .env file
 os.makedirs("output", exist_ok=True)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments.
+
+    Returns:
+        argparse.Namespace: The parsed arguments.
+    """
     parser = argparse.ArgumentParser(description="Chess Divergence Puzzle Generator")
     parser.add_argument("--num_walks", type=int, default=10, help="Number of walks to generate (default: 10)")
-    parser.add_argument(
-        "--output_html",
-        type=str,
-        default="output/puzzle_visualization.html",
-        help="Path to the output HTML file for visualization (default: output/puzzle_visualization.html)",
-    )
     return parser.parse_args()
 
 
-def count_puzzles(csv_path="output/puzzles.csv"):
+def count_puzzles(csv_path: str = "output/puzzles.csv") -> int:
     """
     Count the number of unique puzzles in the CSV file based on PuzzleIdx.
 
@@ -50,7 +51,13 @@ def count_puzzles(csv_path="output/puzzles.csv"):
         return 0
 
 
-def main(num_walks=10, output_html="output/puzzle_visualization.html"):
+def main(num_walks: int = 10) -> None:
+    """
+    Main function to orchestrate the puzzle generation process.
+
+    Args:
+        num_walks (int): Number of walks to generate.
+    """
     logger.info(f"Starting puzzle generation with {num_walks} walks")
     logger.info(f"Base rating: {BASE_RATING}, Target rating: {TARGET_RATING}")
 
@@ -97,15 +104,9 @@ def main(num_walks=10, output_html="output/puzzle_visualization.html"):
     else:
         logger.warning("No new puzzles were generated")
 
-    # Run the visualization
-    if total_puzzle_count > 0:
-        visualize_puzzles(output_html=output_html)
-    else:
-        logger.warning("No puzzles available to visualize")
-
 
 if __name__ == "__main__":
     logger.info("=== Starting Chess Divergence Puzzle Generator ===")
     args = parse_args()
-    main(num_walks=args.num_walks, output_html=args.output_html)
+    main(num_walks=args.num_walks)
     logger.info("=== Finished Chess Divergence Puzzle Generator ===")

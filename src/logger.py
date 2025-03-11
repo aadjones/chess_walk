@@ -11,7 +11,12 @@ if not os.path.exists(logs_dir):
 
 
 # Set up logging
-def setup_logger():
+def setup_logger() -> logging.Logger:
+    """
+    Set up a logger with a memory handler to store recent logs and a file handler to save logs to a file.
+    Returns:
+        logging.Logger: The configured logger.
+    """
     logger = logging.getLogger("chess_divergence")
     logger.setLevel(logging.DEBUG)
 

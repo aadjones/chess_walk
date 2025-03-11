@@ -1,10 +1,11 @@
-from parameters import DIVERGENCE_THRESHOLD, MAX_PLY, MIN_GAMES, MIN_PLY, STARTING_FEN, TEMPERATURE
+import os
 import random
 import sys
-import os
-import pandas as pd
-import chess
 
+import chess
+import pandas as pd
+
+from parameters import MAX_PLY, MIN_GAMES, MIN_PLY, STARTING_FEN, TEMPERATURE
 from src.api import get_move_stats
 from src.divergence import find_divergence
 from src.logger import logger
@@ -12,7 +13,8 @@ from src.logger import logger
 # Add parent directory to path
 sys.path.append("..")
 
-def choose_weighted_move(fen, base_rating, temperature=TEMPERATURE):
+
+def choose_weighted_move(fen: str, base_rating: str, temperature: float = TEMPERATURE) -> str | None:
     """
     Retrieves the top moves for the given position and chooses one based on dynamically computed weights
     from the move frequencies, optionally using temperature scaling.
@@ -29,26 +31,29 @@ def choose_weighted_move(fen, base_rating, temperature=TEMPERATURE):
     if not moves or total < MIN_GAMES:
         logger.warning(f"Insufficient data: moves={bool(moves)}, total={total}")
         return None
-    
+
     # Use the frequency values to derive weights
     frequencies = [move["freq"] for move in moves]
-    
+
     # Apply temperature scaling:
     # If temperature > 1, the distribution flattens (more randomness)
     # If temperature < 1, the distribution sharpens (more deterministic)
     scaled_weights = [f ** (1 / temperature) for f in frequencies]
-    
+
     # Normalize weights so they sum to 1
     total_weight = sum(scaled_weights)
     normalized_weights = [w / total_weight for w in scaled_weights]
-    
+
     move_choices = [move["uci"] for move in moves]
     chosen_move = random.choices(move_choices, weights=normalized_weights, k=1)[0]
-    
-    logger.debug(f"Moves: {[(m['uci'], m['freq']) for m in moves]}, Scaled Weights: {normalized_weights}, Selected move: {chosen_move}")
+
+    logger.debug(
+        f"Moves: {[(m['uci'], m['freq']) for m in moves]}, Scaled Weights: {normalized_weights}, Selected move: {chosen_move}"
+    )
     return chosen_move
 
-def evaluate_divergence(fen, base_rating, target_rating, ply):
+
+def evaluate_divergence(fen: str, base_rating: str, target_rating: str, ply: int) -> dict | None:
     """
     Evaluates the current position for divergence between rating cohorts.
 
@@ -64,13 +69,16 @@ def evaluate_divergence(fen, base_rating, target_rating, ply):
     logger.debug(f"Evaluating divergence at ply {ply}")
     divergence = find_divergence(fen, base_rating, target_rating)
     if divergence:
-        logger.debug(f"Snapshot at ply {ply}: divergence found with top_base_move={divergence['top_base_move']}, top_target_move={divergence['top_target_move']}")
+        logger.debug(
+            f"Snapshot at ply {ply}: divergence found with top_base_move={divergence['top_base_move']}, top_target_move={divergence['top_target_move']}"
+        )
         return divergence
     else:
         logger.info(f"Snapshot at ply {ply}: no divergence found")
         return None
 
-def validate_initial_position(fen, base_rating, target_rating):
+
+def validate_initial_position(fen: str, base_rating: str, target_rating: str) -> bool:
     """
     Validates that the initial position has sufficient move data for both cohorts.
 
@@ -89,7 +97,8 @@ def validate_initial_position(fen, base_rating, target_rating):
         return False
     return True
 
-def create_puzzle_data(divergence, base_rating, target_rating, ply):
+
+def create_puzzle_data(divergence: dict, base_rating: str, target_rating: str, ply: int) -> dict:
     """
     Creates a dictionary containing puzzle data for the given divergence.
 
@@ -109,21 +118,28 @@ def create_puzzle_data(divergence, base_rating, target_rating, ply):
         "ply": ply,
         "base_top_moves": divergence["base_df"]["Move"].tolist(),
         "base_freqs": divergence["base_df"]["Freq"].tolist(),
-        "base_wdls": list(zip(
-            divergence["base_df"]["White %"] / 100,
-            divergence["base_df"]["Draw %"] / 100,
-            divergence["base_df"]["Black %"] / 100
-        )),
+        "base_wdls": list(
+            zip(
+                divergence["base_df"]["White %"] / 100,
+                divergence["base_df"]["Draw %"] / 100,
+                divergence["base_df"]["Black %"] / 100,
+            )
+        ),
         "target_top_moves": divergence["target_df"]["Move"].tolist(),
         "target_freqs": divergence["target_df"]["Freq"].tolist(),
-        "target_wdls": list(zip(
-            divergence["target_df"]["White %"] / 100,
-            divergence["target_df"]["Draw %"] / 100,
-            divergence["target_df"]["Black %"] / 100
-        )),
+        "target_wdls": list(
+            zip(
+                divergence["target_df"]["White %"] / 100,
+                divergence["target_df"]["Draw %"] / 100,
+                divergence["target_df"]["Black %"] / 100,
+            )
+        ),
     }
 
-def build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_idx, ply):
+
+def build_puzzle_dataframe(
+    divergence: dict, fen: str, base_rating: str, target_rating: str, puzzle_idx: int, ply: int
+) -> pd.DataFrame:
     """
     Builds a DataFrame for the puzzle with base and target cohort data.
 
@@ -155,9 +171,11 @@ def build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_i
     puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
     return puzzle_df
 
-def save_puzzle_to_csv(puzzle_df, output_path="output/puzzles.csv"):
+
+def save_puzzle_to_csv(puzzle_df: pd.DataFrame, output_path: str = "output/puzzles.csv"):
     """
-    Saves the puzzle DataFrame to a CSV file, appending to existing data if it exists.
+    Saves the puzzle DataFrame to a CSV file, appending to existing data if it exists,
+    and skipping rows with duplicate FENs.
 
     Args:
         puzzle_df (pd.DataFrame): DataFrame containing puzzle data.
@@ -170,11 +188,27 @@ def save_puzzle_to_csv(puzzle_df, output_path="output/puzzles.csv"):
             logger.debug(f"Max existing PuzzleIdx: {max_existing_idx}")
             # Adjust puzzle_idx to continue from the highest existing index
             puzzle_idx = max_existing_idx + 1
+
+            # Reset index to allow modification of PuzzleIdx
             puzzle_df = puzzle_df.reset_index(level="PuzzleIdx")
             puzzle_df["PuzzleIdx"] = puzzle_idx
             puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
             puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
-            puzzle_df = pd.concat([existing_df, puzzle_df])
+
+            # Check for duplicate FENs
+            if not existing_df.empty and "FEN" in existing_df.columns and "FEN" in puzzle_df.columns:
+                # Identify rows with FENs already in existing_df
+                duplicate_mask = puzzle_df["FEN"].isin(existing_df["FEN"])
+                if duplicate_mask.any():
+                    duplicate_fens = puzzle_df.loc[duplicate_mask, "FEN"].unique()
+                    logger.info(f"Skipping {len(duplicate_fens)} rows with duplicate FENs: {duplicate_fens}")
+                    puzzle_df = puzzle_df[~duplicate_mask]  # Keep only non-duplicate rows
+
+            # Concatenate only if there are rows to add
+            if not puzzle_df.empty:
+                puzzle_df = pd.concat([existing_df, puzzle_df])
+            else:
+                puzzle_df = existing_df  # No new rows to add, use existing data
         except Exception as e:
             logger.warning(f"Error loading existing puzzles.csv: {e}. Overwriting.")
             puzzle_idx = 0
@@ -182,10 +216,23 @@ def save_puzzle_to_csv(puzzle_df, output_path="output/puzzles.csv"):
             puzzle_df["PuzzleIdx"] = puzzle_idx
             puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
             puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
-    puzzle_df.to_csv(output_path)
-    logger.debug(f"After saving, puzzles.csv has {len(puzzle_df.index.get_level_values('PuzzleIdx').unique())} unique PuzzleIdx values.")
+    else:
+        # If file doesn't exist, set initial PuzzleIdx and index
+        puzzle_df = puzzle_df.reset_index(level="PuzzleIdx")
+        puzzle_df["PuzzleIdx"] = 0
+        puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
+        puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
 
-def generate_and_save_puzzles(base_rating, target_rating, min_ply=MIN_PLY, max_ply=MAX_PLY):
+    # Save to CSV
+    puzzle_df.to_csv(output_path)
+    logger.debug(
+        f"After saving, puzzles.csv has {len(puzzle_df.index.get_level_values('PuzzleIdx').unique())} unique PuzzleIdx values."
+    )
+
+
+def generate_and_save_puzzles(
+    base_rating: str, target_rating: str, min_ply: int = MIN_PLY, max_ply: int = MAX_PLY
+) -> list[dict]:
     """
     Generates puzzles by performing a random walk and saving positions with significant divergence.
 
@@ -234,7 +281,9 @@ def generate_and_save_puzzles(base_rating, target_rating, min_ply=MIN_PLY, max_p
             recent_logs = [record.getMessage() for record in logger.handlers[0].buffer[-5:]]
             logger.debug(f"Recent logs: {recent_logs}")
             if any("Missing move data" in msg for msg in recent_logs):
-                logger.warning(f"Aborting walk at ply {ply+1} due to missing move data for target rating {target_rating}")
+                logger.warning(
+                    f"Aborting walk at ply {ply+1} due to missing move data for target rating {target_rating}"
+                )
                 break
             logger.info(f"Snapshot at ply {ply+1}: no divergence found")
             continue

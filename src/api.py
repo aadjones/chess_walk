@@ -60,17 +60,19 @@ def get_move_stats(fen, rating, top_n=None):
                 draw_rate = move["draws"] / total
                 loss_rate = move["black"] / total if active_color == "w" else move["white"] / total
                 # After we compute 'total' for each move...
-                move_stats.append({
-                    "uci": move["uci"],
-                    "freq": total / total_games,
-                    "win_rate": win_rate,
-                    "draw_rate": draw_rate,
-                    "loss_rate": loss_rate,
-                    "games_white": move["white"],
-                    "games_draws": move["draws"],
-                    "games_black": move["black"],
-                    "games_total": total,
-                })
+                move_stats.append(
+                    {
+                        "uci": move["uci"],
+                        "freq": total / total_games,
+                        "win_rate": win_rate,
+                        "draw_rate": draw_rate,
+                        "loss_rate": loss_rate,
+                        "games_white": move["white"],
+                        "games_draws": move["draws"],
+                        "games_black": move["black"],
+                        "games_total": total,
+                    }
+                )
 
         if not move_stats:  # If no valid moves after processing
             logger.warning(f"No valid move stats for {fen} at rating {rating}")

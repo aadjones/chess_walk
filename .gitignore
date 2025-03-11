@@ -131,5 +131,5 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# Output files
-output/
+# Deprecated files
+deprecated/
