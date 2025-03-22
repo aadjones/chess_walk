@@ -1,0 +1,103 @@
+{
+  "path": "src/walker.py",
+  "imports": [
+    "os",
+    "random",
+    "sys",
+    "chess",
+    "pandas",
+    "parameters.MAX_PLY",
+    "parameters.MIN_GAMES",
+    "parameters.MIN_PLY",
+    "parameters.STARTING_FEN",
+    "parameters.TEMPERATURE",
+    "src.api.get_move_stats",
+    "src.divergence.find_divergence",
+    "src.logger.logger"
+  ],
+  "classes": [],
+  "functions": [
+    {
+      "name": "choose_weighted_move",
+      "doc": "Retrieves the top moves for the given position and chooses one based on dynamically computed weights\nfrom the move frequencies, optionally using temperature scaling.\n\nArgs:\n    fen (str): Position in FEN notation.\n    base_rating (str): Rating band to use for move selection.\n    temperature (float): Temperature parameter to control randomness. Default is 1.0.\n\nReturns:\n    str or None: The chosen move in UCI format, or None if insufficient data.",
+      "args": [
+        "fen",
+        "base_rating",
+        "temperature"
+      ],
+      "decorators": [],
+      "returns": "str | None"
+    },
+    {
+      "name": "evaluate_divergence",
+      "doc": "Evaluates the current position for divergence between rating cohorts.\n\nArgs:\n    fen (str): The current position in FEN.\n    base_rating (str): Rating band used for base move statistics.\n    target_rating (str): Rating band used for target move statistics.\n    ply (int): Current ply number.\n\nReturns:\n    dict or None: Divergence dictionary if found, else None",
+      "args": [
+        "fen",
+        "base_rating",
+        "target_rating",
+        "ply"
+      ],
+      "decorators": [],
+      "returns": "dict | None"
+    },
+    {
+      "name": "validate_initial_position",
+      "doc": "Validates that the initial position has sufficient move data for both cohorts.\n\nArgs:\n    fen (str): The initial position in FEN.\n    base_rating (str): Rating band for base cohort.\n    target_rating (str): Rating band for target cohort.\n\nReturns:\n    bool: True if the position has sufficient data, False otherwise.",
+      "args": [
+        "fen",
+        "base_rating",
+        "target_rating"
+      ],
+      "decorators": [],
+      "returns": "bool"
+    },
+    {
+      "name": "create_puzzle_data",
+      "doc": "Creates a dictionary containing puzzle data for the given divergence.\n\nArgs:\n    divergence (dict): Divergence data containing base_df, target_df, and fen.\n    base_rating (str): Rating band for base cohort.\n    target_rating (str): Rating band for target cohort.\n    ply (int): Current ply number.\n\nReturns:\n    dict: Puzzle data dictionary.",
+      "args": [
+        "divergence",
+        "base_rating",
+        "target_rating",
+        "ply"
+      ],
+      "decorators": [],
+      "returns": "dict"
+    },
+    {
+      "name": "build_puzzle_dataframe",
+      "doc": "Builds a DataFrame for the puzzle with base and target cohort data.\n\nArgs:\n    divergence (dict): Divergence data containing base_df and target_df.\n    fen (str): The FEN of the position.\n    base_rating (str): Rating band for base cohort.\n    target_rating (str): Rating band for target cohort.\n    puzzle_idx (int): Index of the puzzle.\n    ply (int): Current ply number.\n\nReturns:\n    pd.DataFrame: Combined DataFrame with base and target cohort data, indexed by Cohort, Row, and PuzzleIdx.",
+      "args": [
+        "divergence",
+        "fen",
+        "base_rating",
+        "target_rating",
+        "puzzle_idx",
+        "ply"
+      ],
+      "decorators": [],
+      "returns": "pd.DataFrame"
+    },
+    {
+      "name": "save_puzzle_to_csv",
+      "doc": "Saves the puzzle DataFrame to a CSV file, appending to existing data if it exists,\nand skipping rows with duplicate FENs (for the same CohortPair).\n\nArgs:\n    puzzle_df (pd.DataFrame): DataFrame containing puzzle data.\n    output_path (str): Path to the output CSV file.",
+      "args": [
+        "puzzle_df",
+        "output_path"
+      ],
+      "decorators": [],
+      "returns": null
+    },
+    {
+      "name": "generate_and_save_puzzles",
+      "doc": "Generates puzzles by performing a random walk and saving positions with significant divergence.\n\nArgs:\n    base_rating (str): Rating band for base cohort.\n    target_rating (str): Rating band for target cohort.\n    min_ply (int): Minimum ply to start checking for divergence.\n    max_ply (int): Maximum ply for the random walk.\n\nReturns:\n    list: List of puzzle data dictionaries.",
+      "args": [
+        "base_rating",
+        "target_rating",
+        "min_ply",
+        "max_ply"
+      ],
+      "decorators": [],
+      "returns": "list[dict]"
+    }
+  ]
+}

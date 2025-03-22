@@ -1,0 +1,60 @@
+{
+  "path": "src/divergence.py",
+  "imports": [
+    "pandas",
+    "scipy.stats.chi2_contingency",
+    "statsmodels.stats.proportion.proportions_ztest",
+    "parameters.MIN_GAMES",
+    "parameters.MIN_WIN_RATE_DELTA",
+    "src.api.get_move_stats",
+    "src.logger.logger"
+  ],
+  "classes": [],
+  "functions": [
+    {
+      "name": "build_move_df",
+      "doc": "Convert raw move data into a DataFrame.\nArgs:\n    moves (list): A list of dictionaries containing move data.\n\nReturns:\n    pd.DataFrame: A DataFrame with the move data.",
+      "args": [
+        "moves"
+      ],
+      "decorators": [],
+      "returns": "pd.DataFrame"
+    },
+    {
+      "name": "check_frequency_divergence",
+      "doc": "Perform chi-square test to check if move frequencies differ significantly.\nArgs:\n    base_df (pd.DataFrame): The base cohort move data.\n    target_df (pd.DataFrame): The target cohort move data.\n    p_threshold (float): The significance level for the chi-square test.\n\nReturns: tuple[bool, float]: A tuple containing a boolean indicating if there is a significant difference in move frequencies and the p-value of the chi-square test.",
+      "args": [
+        "base_df",
+        "target_df",
+        "p_threshold"
+      ],
+      "decorators": [],
+      "returns": "tuple[bool, float]"
+    },
+    {
+      "name": "check_win_rate_difference",
+      "doc": "Perform Z-test to check if win rate for a move differs significantly.\nArgs:\n    base_df (pd.DataFrame): The base cohort move data.\n    target_df (pd.DataFrame): The target cohort move data.\n    move (str): The move to check.\n    p_threshold (float): The significance level for the Z-test.\n    min_games (int): The minimum number of games to consider a move.\n\nReturns: tuple[bool, float]: A tuple containing a boolean indicating if the target move outperforms the base move and the p-value of the Z-test.",
+      "args": [
+        "base_df",
+        "target_df",
+        "move",
+        "p_threshold",
+        "min_games"
+      ],
+      "decorators": [],
+      "returns": "tuple[bool, float]"
+    },
+    {
+      "name": "find_divergence",
+      "doc": "Find positions where the target cohort\u2019s top move outperforms the base cohort\u2019s top move when played by the base cohort.\nArgs:\n    fen (str): The FEN of the position.\n    base_rating (str): The base rating.\n    target_rating (str): The target rating.\n    p_threshold (float): The significance level for the Z-test.\n\nReturns: dict | None: A dictionary containing the divergence information if a divergence is detected, otherwise None.",
+      "args": [
+        "fen",
+        "base_rating",
+        "target_rating",
+        "p_threshold"
+      ],
+      "decorators": [],
+      "returns": "dict | None"
+    }
+  ]
+}

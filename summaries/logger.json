@@ -1,0 +1,20 @@
+{
+  "path": "src/logger.py",
+  "imports": [
+    "logging",
+    "logging.handlers",
+    "os",
+    "sys",
+    "datetime.datetime"
+  ],
+  "classes": [],
+  "functions": [
+    {
+      "name": "setup_logger",
+      "doc": "Set up a logger with a memory handler to store recent logs and a file handler to save logs to a file.\nReturns:\n    logging.Logger: The configured logger.",
+      "args": [],
+      "decorators": [],
+      "returns": "logging.Logger"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ from src.logger import logger
 sys.path.append("..")  # Add parent directory to path
 
 
-def get_move_stats(fen, rating, top_n=None):
+def get_move_stats(fen, rating, top_n=None) -> tuple[list[dict], int]:
     """
     Fetches move statistics for a given FEN and rating range from the Lichess Explorer API.
 

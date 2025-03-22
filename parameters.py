@@ -3,8 +3,8 @@
 # Each value represents a range (e.g., 1400 means 1400-1599, 1600 means 1600-1799, etc.).
 VALID_RATINGS = ["0", "1000", "1200", "1400", "1600", "1800", "2000", "2200", "2500"]
 
-BASE_RATING = "0"
-TARGET_RATING = "1000"
+BASE_RATING = "2000"
+TARGET_RATING = "2500"
 # Ply range
 MIN_PLY = 4
 MAX_PLY = 20
@@ -21,6 +21,12 @@ TEMPERATURE = 1.0
 # Minimum number of games to consider a move
 MIN_GAMES = 2
 
+# Minimum win rate difference to consider a divergence
+MIN_WIN_RATE_DELTA = 0.07
+
 # API settings
 API_BASE = "https://explorer.lichess.ovh/lichess"
 RATE_LIMIT_DELAY = 1.0  # Seconds between calls
+
+# GPT model
+GPT_MODEL = "gpt-4o-2024-08-06"

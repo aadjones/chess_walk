@@ -1,0 +1,25 @@
+{
+  "path": "src/api.py",
+  "imports": [
+    "sys",
+    "time",
+    "requests",
+    "parameters.MIN_GAMES",
+    "parameters.RATE_LIMIT_DELAY",
+    "src.logger.logger"
+  ],
+  "classes": [],
+  "functions": [
+    {
+      "name": "get_move_stats",
+      "doc": "Fetches move statistics for a given FEN and rating range from the Lichess Explorer API.\n\nArgs:\n    fen (str): Position in FEN notation.\n    rating (str): Rating band (e.g., \"2000\" or \"1400-1600\").\n\nReturns:\n    tuple: (list of move dictionaries, total games) or (None, 0) if data is unavailable or invalid.",
+      "args": [
+        "fen",
+        "rating",
+        "top_n"
+      ],
+      "decorators": [],
+      "returns": "tuple[list[dict], int]"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from parameters import BASE_RATING, TARGET_RATING
+from src.csv_utils import sort_csv
 from src.logger import logger
 from src.walker import generate_and_save_puzzles
 
@@ -92,6 +93,10 @@ def main(num_walks: int = 10) -> None:
         if not puzzles:
             logger.warning(f"No puzzles generated for walk {i+1}")
             continue
+
+    # Sort the puzzles.csv file by rating cohort pair
+    sort_csv()
+    logger.info("Sorted puzzles.csv by rating cohort pair")
 
     # Count total puzzles after generation
     total_puzzle_count = count_puzzles()
