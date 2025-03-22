@@ -1,0 +1,14 @@
+name: Summarize
+on:
+  push:
+    paths:
+      - 'src/**'
+jobs:
+  update-summaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: make summarize
+      - name: Check and commit changes
+        run: |
+          git diff --exit-code || git commit -am 'ci: update summaries'

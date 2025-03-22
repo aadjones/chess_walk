@@ -27,6 +27,3 @@ MIN_WIN_RATE_DELTA = 0.07
 # API settings
 API_BASE = "https://explorer.lichess.ovh/lichess"
 RATE_LIMIT_DELAY = 1.0  # Seconds between calls
-
-# GPT model
-GPT_MODEL = "gpt-4o-2024-08-06"
