@@ -6,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from summarizer.config import CONFIG, GPT_MODEL
+from summarizer.config import CONFIG, MAIN_MODEL, PRELIMINARY_MODEL
 
 # Set up logging configuration
 logging.basicConfig(
@@ -50,12 +50,12 @@ def load_summaries():
     return "\n\n".join(texts)
 
 
-def call_llm(system: str, user: str) -> str:
+def call_llm(system: str, user: str, model: str) -> str:
     logger.info("Making LLM API call")
     logger.debug(f"System prompt: {system[:100]}...")
     logger.debug(f"User prompt length: {len(user)} characters")
     resp = client.chat.completions.create(
-        model=GPT_MODEL,
+        model=model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=0.0,
     )
@@ -74,15 +74,15 @@ def main():
     dir_name = Path(CONFIG["paths"]["src_dir"]).name
 
     logger.info("Generating preliminary summary")
-    preliminary = call_llm(SYSTEM_PRELIMINARY, combined)
+    preliminary = call_llm(SYSTEM_PRELIMINARY, combined, model=PRELIMINARY_MODEL)
 
     logger.info("Generating Mermaid diagram")
-    mermaid = call_llm(SYSTEM_MERMAID, combined)
+    mermaid = call_llm(SYSTEM_MERMAID, combined, model=MAIN_MODEL)
     (reports / f"{dir_name}_flow.mmd").write_text(mermaid + "\n")
     logger.debug("Wrote Mermaid diagram to file")
 
     logger.info("Generating combined summary")
-    combined = call_llm(SYSTEM_COMBINED, f"{preliminary}\n\n{mermaid}")
+    combined = call_llm(SYSTEM_COMBINED, f"{preliminary}\n\n{mermaid}", model=MAIN_MODEL)
     (reports / f"{dir_name}_summary.md").write_text(combined + "\n")
     logger.debug("Wrote combined summary to file")
 
