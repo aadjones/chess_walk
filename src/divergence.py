@@ -2,7 +2,7 @@ import pandas as pd
 from scipy.stats import chi2_contingency
 from statsmodels.stats.proportion import proportions_ztest
 
-from parameters import MIN_GAMES
+from parameters import MIN_GAMES, MIN_WIN_RATE_DELTA
 from src.api import get_move_stats
 from src.logger import logger
 
@@ -130,7 +130,9 @@ def find_divergence(fen: str, base_rating: str, target_rating: str, p_threshold:
         base_df[base_df["Move"] == top_target_move]["Games"].iloc[0] if top_target_move in base_df["Move"].values else 0
     )
     target_win = target_df[target_df["Move"] == top_target_move]["White %"].iloc[0]  # For logging only
-    if base_win > base_top_win and base_games >= 5:  # Target move beats base’s top move in base cohort
+    if (
+        base_win - base_top_win >= MIN_WIN_RATE_DELTA and base_games >= 5
+    ):  # Target move beats base’s top move in base cohort
         logger.info(
             f"Base cohort win rate for top move {top_base_move}: {base_top_win:.2f}%, "
             f"Base cohort win rate for {top_target_move}: {base_win:.2f}% (games: {base_games}), "

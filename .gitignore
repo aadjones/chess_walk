@@ -133,3 +133,10 @@ Desktop.ini
 
 # Deprecated files
 deprecated/
+
+# Generated summaries and reports
+reports/
+*_summary.md
+*_flow.mmd
+summaries/*.json
+

@@ -1,0 +1,4 @@
+paths:
+  src_dir: src
+  summaries_dir: summaries
+  reports_dir: reports
