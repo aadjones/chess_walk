@@ -17,4 +17,6 @@ openai==1.55.3
 pyyaml==6.0.1
 pre-commit>=3.5.1
 stockfish
+pydantic
 pydantic-settings
+python-dotenv>=1.0.0
