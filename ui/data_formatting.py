@@ -2,72 +2,93 @@
 """Functions for cleaning and formatting DataFrames for display."""
 
 import pandas as pd
-import streamlit as st
-from config import (
-    COL_COHORT, COL_PUZZLE_IDX, COL_COHORT_PAIR, COL_FREQ, COL_GAMES,
-    COL_RATING, COL_WHITE_PERC, COL_DRAW_PERC, COL_BLACK_PERC,
-    DISPLAY_COLS
-)
+import streamlit as st # Only needed if adding warnings/errors here
+from config import settings # Use settings for column names
 
 def cleanup_dataframe(df):
     """Remove unnecessary columns, format types, and set index."""
     if df is None or df.empty:
-        return df
+        return pd.DataFrame() # Return consistent empty DataFrame
+
+    df_copy = df.copy() # Work on a copy to avoid SettingWithCopyWarning
 
     # Columns to potentially drop
-    cols_to_drop = [COL_COHORT, COL_PUZZLE_IDX, COL_COHORT_PAIR, COL_RATING]
-    df = df.drop(columns=[col for col in cols_to_drop if col in df.columns], errors='ignore')
+    cols_to_drop = [
+        settings.col_cohort, settings.col_puzzle_idx,
+        settings.col_cohort_pair, settings.col_rating
+    ]
+    # Drop only existing columns
+    existing_cols_to_drop = [col for col in cols_to_drop if col in df_copy.columns]
+    if existing_cols_to_drop:
+        df_copy.drop(columns=existing_cols_to_drop, inplace=True)
 
-    # Format Freq as percentage (numeric for now, display formatting later)
-    if COL_FREQ in df.columns:
-        df[COL_FREQ] = df[COL_FREQ] * 100
+    # Format Freq as percentage (numeric for sorting, formatted later)
+    freq_col = settings.col_freq
+    if freq_col in df_copy.columns:
+        # Convert to numeric, coercing errors, then multiply
+        df_copy[freq_col] = pd.to_numeric(df_copy[freq_col], errors='coerce') * 100
 
     # Format Games as integer
-    if COL_GAMES in df.columns:
-        df[COL_GAMES] = pd.to_numeric(df[COL_GAMES], errors='coerce').fillna(0).astype(int)
+    games_col = settings.col_games
+    if games_col in df_copy.columns:
+        df_copy[games_col] = pd.to_numeric(df_copy[games_col], errors='coerce').fillna(0).astype(int)
 
-    # Reset index to be 1-based for display
-    df.reset_index(drop=True, inplace=True)
-    df.index = df.index + 1
+    # Sort by Freq (descending) if available and numeric
+    if freq_col in df_copy.columns and pd.api.types.is_numeric_dtype(df_copy[freq_col]):
+        df_copy.sort_values(freq_col, ascending=False, inplace=True, na_position='last')
 
-    # Sort by Freq (descending) if available
-    if COL_FREQ in df.columns:
-        df.sort_values(COL_FREQ, ascending=False, inplace=True)
+    # Reset index to be 1-based for display AFTER sorting
+    df_copy.reset_index(drop=True, inplace=True)
+    df_copy.index = df_copy.index + 1
 
-    return df
+    return df_copy
 
 
 def format_wdl_column(df):
     """Combine W/D/L percentages into a single formatted string column."""
     if df is None or df.empty:
-        return df
+        return df # Return original if empty or None
 
-    wdl_cols = [COL_WHITE_PERC, COL_DRAW_PERC, COL_BLACK_PERC]
-    if all(col in df.columns for col in wdl_cols):
+    df_copy = df.copy()
+    wdl_col = 'W/D/L' # The target column name
+    # Source columns from settings
+    white_col, draw_col, black_col = settings.col_white_perc, settings.col_draw_perc, settings.col_black_perc
+    wdl_source_cols = [white_col, draw_col, black_col]
+
+    if all(col in df_copy.columns for col in wdl_source_cols):
         # Ensure WDL columns are numeric before formatting
-        for col in wdl_cols:
-             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+        for col in wdl_source_cols:
+             df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce').fillna(0.0)
 
-        # Apply formatting row-wise
-        df['W/D/L'] = df.apply(
-            lambda row: f"{row[COL_WHITE_PERC]:.1f}% / {row[COL_DRAW_PERC]:.1f}% / {row[COL_BLACK_PERC]:.1f}%",
-            axis=1
-        )
-        # Drop original W/D/L columns
-        df = df.drop(columns=wdl_cols, errors='ignore')
-    else:
-         # If WDL columns aren't present, add an empty placeholder if needed by DISPLAY_COLS
-         if 'W/D/L' in DISPLAY_COLS and 'W/D/L' not in df.columns:
-              df['W/D/L'] = "N/A"
+        # Apply formatting row-wise safely
+        try:
+            df_copy[wdl_col] = df_copy.apply(
+                lambda row: f"{row[white_col]:.1f}%/{row[draw_col]:.1f}%/{row[black_col]:.1f}%",
+                axis=1
+            )
+            # Drop original W/D/L columns AFTER creating the new one
+            df_copy = df_copy.drop(columns=wdl_source_cols, errors='ignore')
+        except Exception as e:
+            # Handle potential errors during apply (though less likely with coercion)
+            st.warning(f"Could not format W/D/L column: {e}")
+            if wdl_col not in df_copy.columns: # Ensure column exists even if formatting fails
+                df_copy[wdl_col] = "Error"
 
-    return df
+    elif wdl_col not in df_copy.columns: # If source columns missing and target missing
+         # Add placeholder if needed by display logic, check settings.display_cols
+         if wdl_col in settings.display_cols:
+              df_copy[wdl_col] = "N/A"
+
+    return df_copy
 
 
 def infer_rating(df, default_rating="N/A"):
     """Infer rating from the DataFrame, using the first row if available."""
-    if df is not None and not df.empty and COL_RATING in df.columns:
-        # Use the rating from the first row (assuming it's consistent per cohort)
-        rating = df[COL_RATING].iloc[0]
+    rating_col = settings.col_rating
+    if df is not None and not df.empty and rating_col in df.columns:
+        # Use the rating from the first row (assuming consistency per cohort within a puzzle)
+        rating = df[rating_col].iloc[0]
+        # Check for NaN or None before returning
         return rating if pd.notna(rating) else default_rating
     return default_rating
 
@@ -76,17 +97,32 @@ def prepare_display_dataframe(df):
     """Select and format columns specifically for Streamlit dataframe display."""
     if df is None or df.empty:
         # Return an empty DataFrame with expected columns for consistent layout
-        return pd.DataFrame(columns=DISPLAY_COLS)
+        return pd.DataFrame(columns=settings.display_cols)
+
+    df_copy = df.copy()
+    display_cols = settings.display_cols
+    freq_col = settings.col_freq
 
     # Ensure only existing columns are selected
-    cols_to_display = [col for col in DISPLAY_COLS if col in df.columns]
-    display_df = df[cols_to_display].copy()
+    cols_to_display = [col for col in display_cols if col in df_copy.columns]
+    display_df = df_copy[cols_to_display].copy()
 
-    # Format Freq column as string with '%'
-    if COL_FREQ in display_df.columns:
-        # Make sure Freq is numeric before formatting
-        display_df[COL_FREQ] = pd.to_numeric(display_df[COL_FREQ], errors='coerce')
-        display_df[COL_FREQ] = display_df[COL_FREQ].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A")
-        # display_df[COL_FREQ] = display_df[COL_FREQ].astype("object") # Ensure string type if needed
+    # Format Freq column as string with '%' for display
+    if freq_col in display_df.columns:
+        # Should already be numeric from cleanup, apply formatting
+        display_df[freq_col] = display_df[freq_col].apply(
+            lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A"
+        )
+        # Ensure object type for consistent display if needed
+        # display_df[freq_col] = display_df[freq_col].astype("object")
+
+    # Ensure all expected display columns exist, even if empty
+    for col in display_cols:
+        if col not in display_df.columns:
+            display_df[col] = "N/A" # Or pd.NA or suitable placeholder
+
+    # Reorder columns according to settings.display_cols
+    display_df = display_df[display_cols]
+
 
     return display_df
