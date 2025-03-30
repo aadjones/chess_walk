@@ -4,35 +4,28 @@
 import streamlit as st
 import pandas as pd
 import math # For checking numeric types and NaN/inf
+import chess # Import python-chess to parse FEN
 from session_state_utils import toggle_stockfish_display
 from config import settings
 
 def format_eval_for_display(numeric_eval, eval_type):
     """Formats numeric evaluation (cp or mate) into a string for display."""
-    if numeric_eval is None:
-        return "N/A"
-
+    if numeric_eval is None: return "N/A"
     if eval_type == "cp":
         if isinstance(numeric_eval, (int, float)) and not math.isnan(numeric_eval) and not math.isinf(numeric_eval):
-             pawn_value = numeric_eval / 100.0
-             return f"{pawn_value:+.2f}"
-        else:
-             return "Invalid"
+             return f"{numeric_eval / 100.0:+.2f}"
+        else: return "Invalid"
     elif eval_type == "mate":
         if isinstance(numeric_eval, (int, float)) and not math.isnan(numeric_eval) and not math.isinf(numeric_eval):
             mate_val = int(numeric_eval)
             prefix = "+" if mate_val > 0 else ""
             return f"Mate {prefix}{abs(mate_val)}" if mate_val !=0 else "Mate"
-        else:
-             return "Invalid"
-    else: # Fallback
-        try:
-            pawn_value = float(numeric_eval) / 100.0
-            return f"{pawn_value:+.2f}"
-        except (ValueError, TypeError):
-             return "Unknown"
+        else: return "Invalid"
+    else:
+        try: return f"{float(numeric_eval) / 100.0:+.2f}"
+        except (ValueError, TypeError): return "Unknown"
 
-def display_stockfish_comparison(analysis_results):
+def display_stockfish_comparison(analysis_results, fen): # Added fen argument
     """Displays the Stockfish analysis using markdown and columns for a clean look."""
     if not analysis_results:
         st.info("Stockfish analysis is not available or failed.")
@@ -42,15 +35,23 @@ def display_stockfish_comparison(analysis_results):
     st.caption("_(Eval after move, from White's perspective)_")
     st.write("") # Add a little vertical space
 
+    # Determine whose turn it is from FEN
+    turn = None
+    if fen:
+        try:
+            board = chess.Board(fen)
+            turn = board.turn # chess.WHITE (True) or chess.BLACK (False)
+        except ValueError:
+            st.warning("Invalid FEN provided, cannot determine turn for delta interpretation.")
+            turn = None # Treat as unknown
+
     # Extract data with defaults
     base_info = analysis_results.get("base", {})
     target_info = analysis_results.get("target", {})
     sf1_info = analysis_results.get("stockfish1", {})
 
-    # Get SAN moves - handle potential " (Illegal)" suffix from evaluation step
     def clean_san(san_string):
         if san_string is None: return "N/A"
-        # Simple cleaning, might need adjustment if other tags appear
         return san_string.split(" (")[0]
 
     base_san = clean_san(base_info.get("san", "N/A"))
@@ -70,46 +71,67 @@ def display_stockfish_comparison(analysis_results):
 
     # --- Create Columns using Markdown ---
     col1, col2, col3 = st.columns(3)
-
     with col1:
         st.markdown("**Base**")
-        # Use larger font size for move, colored red
         st.markdown(f"<span style='color:red; font-size: 1.2em;'>**{base_san}**</span>", unsafe_allow_html=True)
         st.markdown(f"{base_eval_str}")
-
     with col2:
         st.markdown("**Target**")
-        # Use larger font size for move, colored blue
         st.markdown(f"<span style='color:blue; font-size: 1.2em;'>**{target_san}**</span>", unsafe_allow_html=True)
         st.markdown(f"{target_eval_str}")
-
     with col3:
         st.markdown("**Stockfish #1**")
-        # Use larger font size for move, default color
         st.markdown(f"<span style='font-size: 1.2em;'>**{sf1_san}**</span>", unsafe_allow_html=True)
         st.markdown(f"{sf1_eval_str}")
 
-    st.divider() # Keep the divider
+    st.divider()
 
-    # --- Calculate and Display Delta with Clearer Text ---
-    delta_str = "N/A"
+    # --- Calculate and Display Delta based on Turn ---
+    delta_value_part = "N/A"
+    label_prefix = "" # Will be set based on turn
+
     # Calculate delta only if both evaluations are valid centipawn numbers
     if (base_eval_type == "cp" and isinstance(base_eval_num, (int, float)) and
         target_eval_type == "cp" and isinstance(target_eval_num, (int, float)) and
         not math.isnan(base_eval_num) and not math.isinf(base_eval_num) and
         not math.isnan(target_eval_num) and not math.isinf(target_eval_num)):
         try:
-            delta = abs((target_eval_num / 100.0) - (base_eval_num / 100.0))
-            delta_str = f"**{delta:.2f} pawns**" # Make value bold
-        except Exception:
-            delta_str = "**Error**"
-    elif base_eval_type == "mate" or target_eval_type == "mate":
-        delta_str = "*(Mate involved)*" # Simpler text
-    else:
-        delta_str = "*(N/A)*" # Simpler text
+            # Raw difference from White's perspective
+            raw_delta = (target_eval_num / 100.0) - (base_eval_num / 100.0)
+            display_delta = 0.0
+            label_prefix = "Unknown Turn = " # Default
 
-    # Use clearer label
-    st.markdown(f"Cohort Move Difference: {delta_str}")
+            if turn == chess.WHITE:
+                display_delta = raw_delta # Positive means Blue is better for White
+                label_prefix = f"<span style='color:blue'>Blue</span> - <span style='color:red'>Red</span> = "
+            elif turn == chess.BLACK:
+                # We want to show improvement for Black.
+                # Calculate Red - Blue. Positive means Red is better for Black.
+                display_delta = -raw_delta # Flip the sign
+                label_prefix = f"<span style='color:red'>Red</span> - <span style='color:blue'>Blue</span> = "
+            else: # FEN invalid or missing
+                display_delta = raw_delta # Fallback to White's perspective
+                label_prefix = "Blue - Red (Turn Unknown) = "
+
+            # Determine color based on the sign of display_delta
+            # Positive display_delta means the second term in the label is better for the current player
+            # Or more simply: blue if positive, red if negative
+            delta_color = "blue" if display_delta >= 0 else "red"
+            formatted_delta = f"{display_delta:+.2f}"
+            delta_value_part = f"<span style='color:{delta_color}'>**{formatted_delta} pawns**</span>"
+
+        except Exception:
+            delta_value_part = "<span style='color:orange'>**Error**</span>"
+    elif base_eval_type == "mate" or target_eval_type == "mate":
+        delta_value_part = "*(Mate involved)*"
+    else:
+        delta_value_part = "*(N/A)*"
+
+    # Construct the final markdown string
+    final_markdown_string = label_prefix + delta_value_part
+
+    # Display the final string using markdown
+    st.markdown(final_markdown_string, unsafe_allow_html=True)
 
 
 def layout_main_content(fen, svg_board, base_rating, target_rating, base_display_df, target_display_df, stockfish_results=None):
@@ -132,8 +154,8 @@ def layout_main_content(fen, svg_board, base_rating, target_rating, base_display
 
         # --- Conditional Stockfish Display ---
         if st.session_state.get("show_stockfish", False):
-             # Call the new markdown-based display function
-             display_stockfish_comparison(stockfish_results) # <<< RENAMED function call
+             # Pass FEN to the display function
+             display_stockfish_comparison(analysis_results=stockfish_results, fen=fen)
 
 
     with mid_col:
