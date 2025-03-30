@@ -1,0 +1,2271 @@
+# parameters.py
+# Rating bands
+# Valid rating values for the API (from documentation)
+# Each value represents a range (e.g., 1400 means 1400-1599, 1600 means 1600-1799, etc.).
+VALID_RATINGS = ["0", "1000", "1200", "1400", "1600", "1800", "2000", "2200", "2500"]
+
+BASE_RATING = "2000"
+TARGET_RATING = "2500"
+# Ply range
+MIN_PLY = 4
+MAX_PLY = 20
+
+# Starting FEN
+# Configure this to start from different possible positions
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+# Temperature for move selection
+# If temperature > 1, the distribution flattens (more randomness)
+# If temperature < 1, the distribution sharpens (more deterministic)
+TEMPERATURE = 1.0
+
+# Minimum number of games to consider a move
+MIN_GAMES = 2
+
+# Minimum win rate difference to consider a divergence
+MIN_WIN_RATE_DELTA = 0.07
+
+# API settings
+API_BASE = "https://explorer.lichess.ovh/lichess"
+RATE_LIMIT_DELAY = 1.0  # Seconds between calls
+
+# --- End of file: parameters.py ---
+
+# streamlit_app.py
+import os
+import sys
+
+import pandas as pd
+import streamlit as st
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.chess_utils import generate_board_svg_with_arrows, uci_to_san
+
+# Use wide layout for better use of space
+st.set_page_config(layout="wide")
+
+
+def load_puzzle_data():
+    """Load the entire puzzles CSV as a DataFrame (unfiltered)."""
+    # Don't set index_col here; keep all columns.
+    puzzles_df = pd.read_csv("output/puzzles.csv")
+    return puzzles_df
+
+
+def initialize_session_state():
+    """Initialize session state variables if they don't exist."""
+    if "puzzle_index" not in st.session_state:
+        st.session_state["puzzle_index"] = 0
+    # We'll handle "selected_cohort_pair" in main().
+
+
+def clamp_puzzle_index(puzzle_ids):
+    """
+    Ensure puzzle_index is in [0, len(puzzle_ids)-1].
+    If puzzle_ids is empty, puzzle_index stays 0 (we'll handle empty set).
+    """
+    if len(puzzle_ids) == 0:
+        st.session_state["puzzle_index"] = 0
+    else:
+        st.session_state["puzzle_index"] = max(0, min(st.session_state["puzzle_index"], len(puzzle_ids) - 1))
+
+
+def create_sidebar_controls(puzzle_ids):
+    """Create sidebar controls for puzzle navigation and return the chosen puzzle ID."""
+    st.sidebar.title("Puzzle Controls")
+
+    def prev_puzzle():
+        if st.session_state["puzzle_index"] > 0:
+            st.session_state["puzzle_index"] -= 1
+
+    def next_puzzle():
+        if st.session_state["puzzle_index"] < len(puzzle_ids) - 1:
+            st.session_state["puzzle_index"] += 1
+
+    # Create two columns for horizontal button layout
+    col1, col2 = st.sidebar.columns(2)
+
+    with col1:
+        st.button("← Previous", on_click=prev_puzzle, key="prev_button")
+    with col2:
+        st.button("Next →", on_click=next_puzzle, key="next_button")
+
+    # If puzzle_ids is empty, there's nothing to select
+    if not puzzle_ids:
+        st.sidebar.info("No puzzles available for this Cohort Pair.")
+        return None
+
+    # If puzzle_ids has items, clamp puzzle_index to a valid range
+    clamp_puzzle_index(puzzle_ids)
+
+    # Let user directly select from the puzzle IDs
+    # puzzle_ids might look like [100, 101, 102, ...]
+    # We map them to enumerated indices for the selectbox
+    puzzle_index_options = range(len(puzzle_ids))
+    selected_index = st.sidebar.selectbox(
+        "Select Puzzle",
+        options=puzzle_index_options,
+        index=st.session_state["puzzle_index"],
+        format_func=lambda i: f"Puzzle {puzzle_ids[i] + 1}",  # +1 because puzzle_ids are 1-indexed in the frontend
+    )
+    st.session_state["puzzle_index"] = selected_index
+
+    # Return the actual puzzle ID from puzzle_ids
+    return puzzle_ids[selected_index]
+
+
+def process_puzzle_data(puzzle_groups, current_puzzle_id):
+    """Retrieve and process data for the selected puzzle."""
+    if current_puzzle_id is None:
+        return None
+    # puzzle_groups.get_group(...) can raise KeyError if the group doesn't exist
+    # but we should only call this if current_puzzle_id is definitely valid
+    puzzle = puzzle_groups.get_group(current_puzzle_id).copy()
+    return puzzle
+
+
+def prepare_board_data(puzzle):
+    """Prepare chessboard data including FEN and top moves for arrows."""
+    import chess
+
+    fen = puzzle["FEN"].iloc[0]
+    board = chess.Board(fen)
+
+    # We'll assume Cohort has "base"/"target" or something similar
+    base_data = puzzle[puzzle["Cohort"] == "base"].copy()
+    target_data = puzzle[puzzle["Cohort"] == "target"].copy()
+    base_data.sort_values("Freq", ascending=False, inplace=True)
+    target_data.sort_values("Freq", ascending=False, inplace=True)
+
+    base_top_uci = base_data["Move"].iloc[0] if not base_data.empty else None
+    target_top_uci = target_data["Move"].iloc[0] if not target_data.empty else None
+
+    svg_board = generate_board_svg_with_arrows(fen=fen, base_uci=base_top_uci, target_uci=target_top_uci, size=500)
+    return board, svg_board, base_data, target_data
+
+
+def convert_moves_to_san(base_data, target_data, fen):
+    """Convert UCI moves to SAN notation for display."""
+    if base_data is not None and not base_data.empty:
+        base_data.loc[:, "Move"] = base_data["Move"].apply(lambda m: uci_to_san(fen, m))
+    if target_data is not None and not target_data.empty:
+        target_data.loc[:, "Move"] = target_data["Move"].apply(lambda m: uci_to_san(fen, m))
+    return base_data, target_data
+
+
+def cleanup_data(base_data, target_data):
+    """Clean up DataFrames by removing unnecessary columns and formatting data."""
+    for df in (base_data, target_data):
+        if df is None or df.empty:
+            continue
+        for col in ["Cohort", "PuzzleIdx", "CohortPair"]:
+            if col in df.columns:
+                df.drop(columns=col, inplace=True)
+        if "Freq" in df.columns:
+            df.loc[:, "Freq"] = df["Freq"] * 100
+        if "Games" in df.columns:
+            df.loc[:, "Games"] = df["Games"].astype(int)
+        df.reset_index(drop=True, inplace=True)
+        df.index = df.index + 1
+
+    if base_data is not None and not base_data.empty:
+        base_data.sort_values("Freq", ascending=False, inplace=True)
+    if target_data is not None and not target_data.empty:
+        target_data.sort_values("Freq", ascending=False, inplace=True)
+    return base_data, target_data
+
+
+def infer_ratings_and_format_wdl(base_data, target_data):
+    """Infer ratings and combine W/D/L percentages into a single column."""
+    base_rating = "Base"
+    target_rating = "Target"
+    if base_data is not None and not base_data.empty and "Rating" in base_data.columns:
+        base_rating = base_data["Rating"].iloc[0]
+    if target_data is not None and not target_data.empty and "Rating" in target_data.columns:
+        target_rating = target_data["Rating"].iloc[0]
+
+    def format_wdl(row):
+        return f"{row['White %']:.1f}% / {row['Draw %']:.1f}% / {row['Black %']:.1f}%"
+
+    for df in (base_data, target_data):
+        if df is not None and not df.empty:
+            df["W/D/L"] = df.apply(format_wdl, axis=1)
+            for col in ["White %", "Draw %", "Black %"]:
+                if col in df.columns:
+                    df.drop(columns=col, inplace=True)
+
+    return base_rating, target_rating, base_data, target_data
+
+
+def prepare_display_data(base_data, target_data):
+    """Prepare DataFrames for display with selected columns and formatted frequencies."""
+    display_cols = ["Move", "Games", "W/D/L", "Freq"]
+
+    def format_freq(df):
+        if df is not None and not df.empty and "Freq" in df.columns:
+            df["Freq"] = df["Freq"].apply(lambda x: f"{float(x):.1f}%")
+            df["Freq"] = df["Freq"].astype("object")  # ensure string dtype
+        return df
+
+    base_data = format_freq(base_data)
+    target_data = format_freq(target_data)
+
+    if base_data is not None and not base_data.empty:
+        base_display = base_data[[c for c in display_cols if c in base_data.columns]].copy()
+    else:
+        base_display = pd.DataFrame(columns=display_cols)
+
+    if target_data is not None and not target_data.empty:
+        target_display = target_data[[c for c in display_cols if c in target_data.columns]].copy()
+    else:
+        target_display = pd.DataFrame(columns=display_cols)
+
+    return base_display, target_display
+
+
+def layout_display(fen, svg_board, base_rating, target_rating, base_display, target_display):
+    """Lay out the board and tables in a three-column format."""
+    left_col, mid_col, right_col = st.columns([3, 4, 4])
+
+    with left_col:
+        st.markdown("### Board Position")
+        st.write(f"**FEN**: `{fen}`")
+        st.image(svg_board, use_container_width=True)
+
+    with mid_col:
+        st.markdown(f"### Base Cohort ({base_rating})")
+        st.dataframe(base_display, use_container_width=True)
+
+    with right_col:
+        st.markdown(f"### Target Cohort ({target_rating})")
+        st.dataframe(target_display, use_container_width=True)
+
+
+def main():
+    """Main function to orchestrate the app workflow."""
+    # Initialize session state
+    initialize_session_state()
+
+    # Load the full puzzle data
+    puzzles_df = load_puzzle_data()
+
+    # Get unique CohortPair values
+    unique_pairs = sorted(puzzles_df["CohortPair"].unique())
+
+    # If there's no data at all
+    if not unique_pairs:
+        st.warning("No CohortPair data found in CSV.")
+        st.stop()
+
+    # Track old and new CohortPair so we can reset puzzle_index if changed
+    old_cohort_pair = st.session_state.get("selected_cohort_pair", unique_pairs[0])
+
+    new_cohort_pair = st.sidebar.selectbox(
+        "Select Cohort Pair",
+        unique_pairs,
+        index=unique_pairs.index(old_cohort_pair) if old_cohort_pair in unique_pairs else 0,
+    )
+
+    # If the user picked a different pair, reset puzzle_index
+    if new_cohort_pair != old_cohort_pair:
+        st.session_state["selected_cohort_pair"] = new_cohort_pair
+        st.session_state["puzzle_index"] = 0
+    else:
+        # Otherwise keep the old one in session state
+        st.session_state["selected_cohort_pair"] = old_cohort_pair
+
+    # Filter the data to only the chosen CohortPair
+    filtered_df = puzzles_df[puzzles_df["CohortPair"] == st.session_state["selected_cohort_pair"]]
+
+    # Edge case: If there's no data for this pair
+    if filtered_df.empty:
+        st.warning("No data found for this CohortPair!")
+        st.stop()
+
+    # Group by PuzzleIdx for the chosen pair
+    puzzle_groups = filtered_df.groupby("PuzzleIdx")
+    puzzle_ids = sorted(list(puzzle_groups.groups.keys()))
+
+    # If puzzle_ids is empty for some reason, stop
+    if not puzzle_ids:
+        st.warning("No puzzles available after filtering!")
+        st.stop()
+
+    # Create puzzle controls & get the current puzzle ID
+    current_puzzle_id = create_sidebar_controls(puzzle_ids)
+    if current_puzzle_id is None:
+        st.stop()
+
+    # Process puzzle data
+    puzzle = process_puzzle_data(puzzle_groups, current_puzzle_id)
+    if puzzle is None or puzzle.empty:
+        st.warning("No puzzle data found for the current puzzle ID!")
+        st.stop()
+
+    # Prepare board and move data
+    board, svg_board, base_data, target_data = prepare_board_data(puzzle)
+
+    # Convert moves to SAN
+    base_data, target_data = convert_moves_to_san(base_data, target_data, puzzle["FEN"].iloc[0])
+
+    # Clean up DataFrames
+    base_data, target_data = cleanup_data(base_data, target_data)
+
+    # Format ratings and W/D/L
+    base_rating, target_rating, base_data, target_data = infer_ratings_and_format_wdl(base_data, target_data)
+
+    # Prepare for display
+    base_display, target_display = prepare_display_data(base_data, target_data)
+
+    # Render layout
+    layout_display(puzzle["FEN"].iloc[0], svg_board, base_rating, target_rating, base_display, target_display)
+
+
+if __name__ == "__main__":
+    main()
+
+# --- End of file: streamlit_app.py ---
+
+# __init__.py
+
+# --- End of file: __init__.py ---
+
+# test_api.py
+from unittest.mock import patch
+
+import requests
+
+from parameters import RATE_LIMIT_DELAY
+from src.api import get_move_stats
+
+# Define a constant for the valid FEN string
+VALID_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+def test_get_move_stats_success():
+    """Test successful API call with standard response"""
+    mock_response = {
+        "moves": [
+            {"uci": "e2e4", "white": 500, "black": 300, "draws": 200},
+            {"uci": "e2e3", "white": 100, "black": 50, "draws": 50},
+        ],
+        "white": 600,
+        "black": 350,
+        "draws": 250,
+    }
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.json.return_value = mock_response
+        mock_get.return_value.status_code = 200
+
+        moves, total = get_move_stats(VALID_FEN, "1400-1600")
+
+        # Verify move calculations
+        assert moves[0]["uci"] == "e2e4"
+        assert round(moves[0]["freq"], 2) == 0.83  # (500+300+200)/1200 = 0.83
+        assert moves[1]["uci"] == "e2e3"
+        assert round(moves[1]["freq"], 2) == 0.17  # (100+50+50)/1200 = 0.17
+        assert total == 1200
+
+        # Verify the API call
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        params = kwargs.get("params", {})
+        assert "ratings" in params and params["ratings"] == "1400,1600"
+
+
+def test_get_move_stats_comma_rating():
+    """Test handling of comma-separated rating format"""
+    mock_response = {
+        "moves": [{"uci": "e2e4", "white": 100, "black": 50, "draws": 50}],
+        "white": 100,
+        "black": 50,
+        "draws": 50,
+    }
+
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.json.return_value = mock_response
+        mock_get.return_value.status_code = 200
+
+        moves, total = get_move_stats(VALID_FEN, "1400,1600")
+
+        # Verify API was called with correct rating format
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        params = kwargs.get("params", {})
+        assert "ratings" in params and params["ratings"] == "1400,1600"
+
+
+def test_get_move_stats_http_error():
+    """Test handling of HTTP errors"""
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 404
+        mock_get.return_value.text = "Not Found"
+
+        moves, total = get_move_stats(VALID_FEN, "1400-1600")
+
+        assert moves is None
+        assert total == 0
+
+
+def test_get_move_stats_request_exception():
+    """Test handling of request exceptions"""
+    with patch("requests.get") as mock_get:
+        mock_get.side_effect = requests.RequestException("Connection error")
+
+        moves, total = get_move_stats(VALID_FEN, "1400-1600")
+
+        assert moves is None
+        assert total == 0
+
+
+def test_get_move_stats_json_error():
+    """Test handling of JSON parsing errors"""
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.side_effect = ValueError("Invalid JSON")
+
+        moves, total = get_move_stats(VALID_FEN, "1400-1600")
+
+        assert moves is None
+        assert total == 0
+
+
+def test_get_move_stats_empty_response():
+    """Test handling of valid response with no moves"""
+    mock_response = {"moves": [], "white": 0, "black": 0, "draws": 0}
+
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.json.return_value = mock_response
+        mock_get.return_value.status_code = 200
+
+        moves, total = get_move_stats(VALID_FEN, "1400-1600")
+
+        assert moves is None
+        assert total == 0
+
+
+def test_get_move_stats_no_games():
+    """Test handling of valid response but zero games"""
+    mock_response = {"moves": [{"uci": "e2e4", "white": 0, "black": 0, "draws": 0}], "white": 0, "black": 0, "draws": 0}
+
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.json.return_value = mock_response
+        mock_get.return_value.status_code = 200
+
+        moves, total = get_move_stats(VALID_FEN, "1400-1600")
+
+        assert moves is None
+        assert total == 0
+
+
+def test_get_move_stats_rate_limit():
+    """Test that rate limiting delay is applied"""
+    mock_response = {
+        "moves": [{"uci": "e2e4", "white": 100, "black": 0, "draws": 0}],
+        "white": 100,
+        "black": 0,
+        "draws": 0,
+    }
+
+    with patch("requests.get") as mock_get, patch("time.sleep") as mock_sleep:
+        mock_get.return_value.json.return_value = mock_response
+        mock_get.return_value.status_code = 200
+
+        get_move_stats(VALID_FEN, "1400-1600")
+
+        # Verify that sleep was called for rate limiting
+        mock_sleep.assert_called_once_with(RATE_LIMIT_DELAY)
+
+
+def test_get_move_stats_url_construction():
+    """Test that the API URL is constructed correctly with proper encoding"""
+    mock_response = {
+        "moves": [{"uci": "e2e4", "white": 100, "black": 50, "draws": 50}],
+        "white": 100,
+        "black": 50,
+        "draws": 50,
+    }
+
+    # Test with standard FEN string
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.json.return_value = mock_response
+        mock_get.return_value.status_code = 200
+
+        # Starting position FEN
+        get_move_stats(VALID_FEN, "1400-1600")
+
+        # Verify URL construction
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        params = kwargs.get("params", {})
+        assert params["variant"] == "standard"
+        assert params["speeds"] == "blitz,rapid,classical"
+        assert params["ratings"] == "1400,1600"
+        assert params["fen"] == VALID_FEN  # FEN is passed as-is, encoding handled by requests
+
+    # Test with a more complex FEN
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.json.return_value = mock_response
+        mock_get.return_value.status_code = 200
+
+        complex_fen = "r1bqkbnr/pp1ppppp/2n5/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1"
+        get_move_stats(complex_fen, "1800,2000")
+
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        params = kwargs.get("params", {})
+        assert params["ratings"] == "1800,2000"
+
+# --- End of file: test_api.py ---
+
+# test_csv_utils.py
+import pandas as pd
+
+from src.csv_utils import sort_csv
+
+
+def test_sort_csv(tmp_path):
+    # Create sample unsorted CSV data as a multi-line string.
+    csv_content = (
+        "Cohort,Row,PuzzleIdx,Move,Games,White %,Draw %,Black %,Freq,FEN,Rating,Ply,CohortPair\n"
+        "base,0,0,f3g5,100,45,5,50,0.2,some_fen,1200,6,1400-1800\n"
+        "base,1,0,f3g5,100,45,5,50,0.2,some_fen,1200,6,1200-1600\n"
+        "base,2,0,f3g5,100,45,5,50,0.2,some_fen,1200,6,2000-2500\n"
+        "base,3,0,f3g5,100,45,5,50,0.2,some_fen,1200,6,1000-1400\n"
+    )
+
+    # Write the unsorted CSV to a temporary file.
+    input_file = tmp_path / "puzzles.csv"
+    input_file.write_text(csv_content)
+
+    # Define the output file path in the temporary directory.
+    output_file = tmp_path / "puzzles_sorted.csv"
+
+    # Call your sort_csv function.
+    sort_csv(input_path=str(input_file), output_path=str(output_file))
+
+    # Read the sorted CSV.
+    sorted_df = pd.read_csv(output_file)
+
+    # Extract the CohortPair column to check the order.
+    sorted_cohorts = list(sorted_df["CohortPair"])
+
+    # Expected order is based on the lower bound of the CohortPair (e.g., "1000-1400" should come first).
+    expected_order = ["1000-1400", "1200-1600", "1400-1800", "2000-2500"]
+
+    # Assert that the output is as expected.
+    assert sorted_cohorts == expected_order, f"Expected {expected_order} but got {sorted_cohorts}"
+
+# --- End of file: test_csv_utils.py ---
+
+# test_divergence.py
+from unittest.mock import patch
+
+import pandas as pd
+import pytest
+
+from src.divergence import (
+    build_move_df,
+    check_frequency_divergence,
+    check_win_rate_difference,
+    find_divergence,
+)
+
+MIN_GAMES = 50
+
+BASE_MOVES = [
+    {"uci": "f1b5", "games_total": 18337, "win_rate": 0.4341, "draw_rate": 0.0613, "loss_rate": 0.5046, "freq": 0.4528},
+    {"uci": "f1e2", "games_total": 12013, "win_rate": 0.4724, "draw_rate": 0.0798, "loss_rate": 0.4478, "freq": 0.2966},
+]
+TARGET_MOVES = [
+    {"uci": "f1e2", "games_total": 309, "win_rate": 0.6000, "draw_rate": 0.1000, "loss_rate": 0.3000, "freq": 0.4003},
+    {"uci": "f1b5", "games_total": 267, "win_rate": 0.4419, "draw_rate": 0.1311, "loss_rate": 0.4270, "freq": 0.3459},
+]
+
+
+def test_build_move_df():
+    """
+    Test that the build_move_df function correctly builds a DataFrame from the move data.
+    """
+    df = build_move_df(BASE_MOVES)
+    assert len(df) == 2
+    assert "f1b5" in df["Move"].values
+    assert df["White %"].max() > 0
+
+
+def test_frequency_divergence_significant():
+    """
+    Test that the check_frequency_divergence function correctly identifies significant frequency divergence.
+    """
+    base_df = build_move_df(BASE_MOVES)
+    target_df = build_move_df(TARGET_MOVES)
+    differs, _ = check_frequency_divergence(base_df, target_df)
+    assert differs
+
+
+def test_frequency_divergence_insignificant():
+    """
+    Test that the check_frequency_divergence function correctly identifies insignificant frequency divergence.
+    """
+    same_moves = [{"uci": "f1b5", "games_total": 100, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2, "freq": 0.5}]
+    base_df = build_move_df(same_moves)
+    target_df = build_move_df(same_moves)
+    differs, _ = check_frequency_divergence(base_df, target_df)
+    assert not differs
+
+
+def test_win_rate_difference_significant():
+    """
+    Test that the check_win_rate_difference function correctly identifies significant win rate difference.
+    """
+    base_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [40.0]})
+    target_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [50.0]})
+    better, _ = check_win_rate_difference(base_df, target_df, "f1e2")
+    assert better
+
+
+def test_win_rate_difference_insignificant():
+    """
+    Test that the check_win_rate_difference function correctly identifies insignificant win rate difference.
+    """
+    base_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [47.0]})
+    target_df = pd.DataFrame({"Move": ["f1e2"], "Games": [1000], "White %": [48.0]})
+    better, _ = check_win_rate_difference(base_df, target_df, "f1e2")
+    assert not better
+
+
+def test_win_rate_difference_insufficient_data():
+    """
+    Test that the check_win_rate_difference function correctly handles insufficient data.
+    """
+    base_df = pd.DataFrame({"Move": ["f1e2"], "Games": [2], "White %": [50.0]})
+    target_df = pd.DataFrame({"Move": ["f1e2"], "Games": [100], "White %": [60.0]})
+    better, p_value = check_win_rate_difference(base_df, target_df, "f1e2")
+    assert not better
+    assert p_value is None
+
+
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_significant(caplog):
+    """
+    Test that the find_divergence function correctly identifies significant divergence.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        mock_get_move_stats.side_effect = [
+            (BASE_MOVES, sum(m["games_total"] for m in BASE_MOVES)),
+            (TARGET_MOVES, sum(m["games_total"] for m in TARGET_MOVES)),
+        ]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
+        assert result is not None
+        assert result["top_base_move"] != result["top_target_move"]
+        assert "Divergence detected" in caplog.text  # Updated to match new log message
+
+
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_no_divergence(caplog):
+    """
+    Test that the find_divergence function correctly identifies no divergence.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        same_moves = [
+            {"uci": "f1b5", "games_total": 100, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2, "freq": 0.5}
+        ]
+        mock_get_move_stats.side_effect = [
+            (same_moves, sum(m["games_total"] for m in same_moves)),
+            (same_moves, sum(m["games_total"] for m in same_moves)),
+        ]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
+        assert result is None
+
+
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_insufficient_games(caplog):
+    """
+    Test that the find_divergence function correctly handles insufficient games.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        mock_get_move_stats.side_effect = [
+            (BASE_MOVES, 1),  # Below MIN_GAMES
+            (TARGET_MOVES, sum(m["games_total"] for m in TARGET_MOVES)),
+        ]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
+        assert result is None
+        assert "Insufficient games" in caplog.text
+
+
+@pytest.mark.usefixtures("caplog")
+def test_find_divergence_no_data(caplog):
+    """
+    Test that the find_divergence function correctly handles no data.
+    """
+    with patch("src.divergence.get_move_stats") as mock_get_move_stats:
+        mock_get_move_stats.side_effect = [(None, 0), (TARGET_MOVES, sum(m["games_total"] for m in TARGET_MOVES))]
+        caplog.set_level("INFO")
+        result = find_divergence("test_fen", "2000", "2500", p_threshold=0.10)
+        assert result is None
+        assert "No moves data" in caplog.text
+
+# --- End of file: test_divergence.py ---
+
+# test_save_puzzle_to_csv.py
+import pandas as pd
+
+from src.walker import save_puzzle_to_csv
+
+
+def create_sample_df(
+    puzzle_idx: int, fen: str, cohort: str, row: int, rating: str, ply: int, cohort_pair: str
+) -> pd.DataFrame:
+    """
+    Creates a sample DataFrame mimicking puzzle data.
+    Sets a multi-index for Cohort, Row, PuzzleIdx.
+    """
+    data = {
+        "FEN": [fen],
+        "Rating": [rating],
+        "Ply": [ply],
+        "CohortPair": [cohort_pair],
+        "Move": ["e2e4"],
+        "Games": [100],
+        "White %": [50.0],
+        "Draw %": [30.0],
+        "Black %": [20.0],
+        "Freq": [0.6],
+    }
+    df = pd.DataFrame(data)
+    # Create multi-index for Cohort, Row, PuzzleIdx
+    df.index = pd.MultiIndex.from_tuples([(cohort, row, puzzle_idx)], names=["Cohort", "Row", "PuzzleIdx"])
+    return df
+
+
+def test_save_puzzle_to_csv_new(tmp_path):
+    """
+    Test that saving a new puzzle to a non-existing CSV creates a file with one unique PuzzleIdx.
+    """
+    output_csv = tmp_path / "puzzles.csv"
+    df_new = create_sample_df(
+        puzzle_idx=0, fen="fen1", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
+    )
+    save_puzzle_to_csv(df_new, output_path=str(output_csv))
+    df_loaded = pd.read_csv(str(output_csv), index_col=[0, 1, 2])
+    unique_indices = df_loaded.index.get_level_values("PuzzleIdx").unique()
+    assert len(unique_indices) == 1, f"Expected 1 unique PuzzleIdx, got {len(unique_indices)}"
+
+
+def test_save_puzzle_to_csv_skip_duplicate(tmp_path):
+    """
+    Test that if a puzzle with the same FEN and same CohortPair is saved, it is skipped.
+    """
+    output_csv = tmp_path / "puzzles.csv"
+    # Write an initial puzzle row.
+    df_initial = create_sample_df(
+        puzzle_idx=0, fen="fen_duplicate", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
+    )
+    df_initial.to_csv(str(output_csv))
+
+    # Create a new puzzle with the same FEN and same CohortPair.
+    df_duplicate = create_sample_df(
+        puzzle_idx=99, fen="fen_duplicate", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
+    )
+    save_puzzle_to_csv(df_duplicate, output_path=str(output_csv))
+
+    df_loaded = pd.read_csv(str(output_csv), index_col=[0, 1, 2])
+    unique_indices = df_loaded.index.get_level_values("PuzzleIdx").unique()
+    # The duplicate should be skipped, so unique PuzzleIdx remains 1.
+    assert len(unique_indices) == 1, f"Expected 1 unique PuzzleIdx, got {len(unique_indices)}"
+
+
+def test_save_puzzle_to_csv_append_non_duplicate(tmp_path):
+    """
+    Test that saving a puzzle with a different FEN (or different CohortPair) appends a new row.
+    """
+    output_csv = tmp_path / "puzzles.csv"
+    # Write an initial puzzle row.
+    df_initial = create_sample_df(
+        puzzle_idx=0, fen="fen1", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
+    )
+    df_initial.to_csv(str(output_csv))
+
+    # Create a new puzzle with a different FEN.
+    df_new = create_sample_df(
+        puzzle_idx=99, fen="fen2", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
+    )
+    save_puzzle_to_csv(df_new, output_path=str(output_csv))
+
+    df_loaded = pd.read_csv(str(output_csv), index_col=[0, 1, 2])
+    unique_indices = df_loaded.index.get_level_values("PuzzleIdx").unique()
+    # We expect 2 unique PuzzleIdx values.
+    assert len(unique_indices) == 2, f"Expected 2 unique PuzzleIdx, got {len(unique_indices)}"
+
+# --- End of file: test_save_puzzle_to_csv.py ---
+
+# test_walker.py
+import sys
+from typing import Callable
+from unittest.mock import patch
+
+import chess
+import pandas as pd
+import pytest
+
+from src.walker import (
+    choose_weighted_move,
+    create_puzzle_data,
+    generate_and_save_puzzles,
+)
+
+# Add the project root to path
+sys.path.append("..")
+
+
+def fake_get_move_stats(fen: str, rating: str) -> tuple[list[dict], int]:
+    """
+    Returns legal move lists based on the current board FEN.
+    When it's White to move, returns common white moves.
+    When it's Black to move, returns common black moves.
+    """
+    board = chess.Board(fen)
+    if board.turn:  # White to move
+        return (
+            [
+                {"uci": "e2e4", "freq": 0.6, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+                {"uci": "g1f3", "freq": 0.3, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+                {"uci": "d2d4", "freq": 0.1, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+            ],
+            100,
+        )
+    else:  # Black to move
+        return (
+            [
+                {"uci": "e7e5", "freq": 0.6, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+                {"uci": "g8f6", "freq": 0.3, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+                {"uci": "d7d5", "freq": 0.1, "win_rate": 0.5, "draw_rate": 0.3, "loss_rate": 0.2},
+            ],
+            100,
+        )
+
+
+def test_create_puzzle_data_includes_cohort_pair():
+    base_rating = "1200"
+    target_rating = "1600"
+    fake_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+    # Create fake DataFrames simulating divergence data for base and target cohorts.
+    base_df = pd.DataFrame([{"Move": "e2e4", "Freq": 0.6, "White %": 50, "Draw %": 30, "Black %": 20}])
+    target_df = pd.DataFrame([{"Move": "e2e4", "Freq": 0.4, "White %": 50, "Draw %": 30, "Black %": 20}])
+
+    # Fake divergence dictionary. (Include any other keys your real function expects.)
+    fake_divergence = {
+        "fen": fake_fen,
+        "base_df": base_df,
+        "target_df": target_df,
+    }
+
+    # Call create_puzzle_data with a given ply (for example, 5)
+    puzzle_data = create_puzzle_data(fake_divergence, base_rating, target_rating, ply=5)
+
+    # The expected CohortPair is the combination of base and target ratings.
+    expected_cohort_pair = f"{base_rating}-{target_rating}"
+
+    # Check that the returned puzzle data includes a CohortPair key with the correct value.
+    assert "CohortPair" in puzzle_data, "Puzzle data should include a 'CohortPair' key."
+    assert (
+        puzzle_data["CohortPair"] == expected_cohort_pair
+    ), f"Expected CohortPair '{expected_cohort_pair}', got '{puzzle_data['CohortPair']}'"
+
+
+def custom_choices_factory(moves: list[str]) -> Callable[[list[str], list[float], int], list[str]]:
+    """
+    Returns a custom side_effect function for random.choices that pops moves from
+    the provided iterator.
+    """
+    move_iterator = iter(moves)
+
+    def custom_choices(choices: list[str], weights: list[float], k: int) -> list[str]:
+        return [next(move_iterator)]
+
+    return custom_choices
+
+
+@patch("src.walker.save_puzzle_to_csv", return_value=None)
+@patch("src.walker.find_divergence")
+@patch("src.walker.random.choices")
+@patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)
+def test_generate_and_save_puzzles_success(mock_get_stats, mock_choices, mock_find_divergence, mock_save):
+    """
+    Qualitatively test that generate_and_save_puzzles finds at least one puzzle when
+    significant divergence is detected.
+    """
+    move_sequence = ["e2e4", "e7e5", "g1f3"]
+    mock_choices.side_effect = custom_choices_factory(move_sequence)
+
+    # Create dummy DataFrames for divergence.
+    base_df = pd.DataFrame([{"Move": "e2e4", "Freq": 0.6, "White %": 50, "Draw %": 30, "Black %": 20}])
+    target_df = pd.DataFrame([{"Move": "e2e4", "Freq": 0.5, "White %": 50, "Draw %": 30, "Black %": 20}])
+
+    divergence_dict = {
+        "fen": "fake_fen_after_move",
+        "top_base_move": "e2e4",
+        "top_target_move": "e2e4",
+        "base_df": base_df,
+        "target_df": target_df,
+    }
+    mock_find_divergence.return_value = divergence_dict
+
+    puzzles = generate_and_save_puzzles("1600", "2000", min_ply=1, max_ply=3)
+
+    assert puzzles, "Expected at least one puzzle to be generated."
+    for puzzle in puzzles:
+        assert puzzle.get("base_rating") == "1600"
+        assert puzzle.get("target_rating") == "2000"
+        # Check that the puzzle's ply is at least 1
+        assert puzzle.get("ply") >= 1
+
+
+@patch("src.walker.get_move_stats", side_effect=lambda fen, rating: ([], 0))
+@patch("src.walker.save_puzzle_to_csv", return_value=None)
+def test_generate_and_save_puzzles_insufficient_data(mock_get_stats, mock_save):
+    """
+    Test that generate_and_save_puzzles returns an empty list when there is insufficient move data.
+    """
+    puzzles = generate_and_save_puzzles("1600", "2000", min_ply=1, max_ply=3)
+    assert puzzles == []
+
+
+@patch("src.walker.save_puzzle_to_csv", return_value=None)
+@patch("src.walker.find_divergence")
+@patch("src.walker.random.choices")
+@patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)
+def test_generate_and_save_puzzles_no_significant_divergence(
+    mock_get_stats, mock_choices, mock_find_divergence, mock_save
+):
+    """
+    Test that generate_and_save_puzzles returns an empty list when divergence is not detected.
+    """
+    move_sequence = ["e2e4", "e7e5", "g1f3"]
+    mock_choices.side_effect = custom_choices_factory(move_sequence)
+
+    # Simulate no significant divergence by having find_divergence return None.
+    mock_find_divergence.return_value = None
+
+    puzzles = generate_and_save_puzzles("1600", "2000", min_ply=1, max_ply=3)
+    assert puzzles == []
+
+
+@patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)
+@patch("src.walker.random.choices")
+def test_choose_weighted_move_dynamic(mock_choices, mock_get_stats):
+    """
+    Test that choose_weighted_move uses dynamic, frequency-based weighting with temperature scaling.
+    """
+    temperature = 0.5
+    choose_weighted_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "1600", temperature=temperature)
+    args, kwargs = mock_choices.call_args
+    choices_arg = args[0]
+    weights_arg = kwargs.get("weights")
+    assert choices_arg == ["e2e4", "g1f3", "d2d4"]
+    expected_weights = [0.36 / 0.46, 0.09 / 0.46, 0.01 / 0.46]
+    for computed, expected in zip(weights_arg, expected_weights):
+        assert pytest.approx(computed, rel=1e-3) == expected
+
+# --- End of file: test_walker.py ---
+
+# __init__.py
+
+# --- End of file: __init__.py ---
+
+# dump_codebase.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Script to traverse a Python codebase, ensure each .py file starts with
+a comment containing its filename, and concatenate all processed files
+into a single output text file, skipping specified directories.
+"""
+
+import os
+import sys
+import argparse
+import io  # Using io.open for explicit encoding control is good practice
+
+# --- Default Configuration ---
+# Common directories to skip by default
+DEFAULT_SKIP_DIRS = [
+    '.git', '__pycache__', 'venv', '.venv', 'env', '.env',
+    'build', 'dist', 'node_modules', '.svn', '.hg',
+    '.pytest_cache', '.mypy_cache', '.tox',
+    'site-packages', 'lib', 'include', 'bin', 'logs', 'deprecated',
+    'output', 'reports',  # Common venv dirs
+]
+
+# --- Core Processing Functions ---
+
+def process_python_file(file_path, filename):
+    """
+    Reads a Python file, ensures it starts with '# filename.py\n',
+    and returns the processed content with a footer comment.
+
+    Args:
+        file_path (str): The full path to the Python file.
+        filename (str): The name of the Python file (e.g., 'module.py').
+
+    Returns:
+        str: The processed file content including header and footer,
+             ready for concatenation. Returns None if an error occurs.
+    """
+    header_comment = f"# {filename}\n"
+    # Use '\n' before the # for better separation, and two newlines after
+    footer_comment = f"\n# --- End of file: {filename} ---\n\n"
+    processed_content = None
+
+    try:
+        # Use io.open for explicit encoding and error handling
+        with io.open(file_path, 'r', encoding='utf-8', errors='replace') as infile:
+            file_content = infile.read()
+
+        # Check if the exact header is present
+        if not file_content.startswith(header_comment):
+            # Prepend header if missing (handles empty files too)
+            processed_content = header_comment + file_content
+        else:
+            # Header exists, use content as is
+            processed_content = file_content
+
+        # Ensure the final output chunk ends with the footer
+        return processed_content + footer_comment
+
+    except IOError as e:
+        print(f"Warning: Could not read file {file_path}: {e}", file=sys.stderr)
+        return None
+    except Exception as e: # Catch potential unexpected errors
+        print(f"Warning: Error processing file {file_path}: {e}", file=sys.stderr)
+        return None
+
+
+def process_codebase(root_dir, output_file_path, skip_set):
+    """
+    Traverses the codebase, processes Python files, and writes to the output file.
+
+    Args:
+        root_dir (str): The root directory of the codebase.
+        output_file_path (str): The path to the file where the dump will be written.
+        skip_set (set): A set of directory names to skip during traversal.
+
+    Returns:
+        tuple(int, int) or None: A tuple containing (processed_file_count, skipped_file_count)
+                                 on success, or None if the output file cannot be opened.
+    """
+    processed_count = 0
+    skipped_count = 0
+
+    try:
+        # Open the output file for writing
+        with io.open(output_file_path, 'w', encoding='utf-8') as outfile:
+            print("Starting directory traversal...")
+
+            for dirpath, dirnames, filenames in os.walk(root_dir, topdown=True):
+                # --- Directory Skipping ---
+                # Modify dirnames in-place to prevent os.walk from descending
+                original_dirnames_count = len(dirnames)
+                dirnames[:] = [d for d in dirnames if d not in skip_set]
+                if len(dirnames) < original_dirnames_count:
+                    skipped_dirs = original_dirnames_count - len(dirnames)
+                    # print(f"  Skipping {skipped_dirs} subdirectories in {os.path.relpath(dirpath, root_dir)}")
+
+
+                # --- File Processing ---
+                relative_dir = os.path.relpath(dirpath, root_dir)
+                # Handle root case where relative_dir is '.'
+                if relative_dir == '.':
+                    relative_dir = ''
+
+                # Sort filenames for deterministic output order (optional but nice)
+                filenames.sort()
+
+                for filename in filenames:
+                    if filename.endswith('.py'):
+                        full_path = os.path.join(dirpath, filename)
+                        relative_file_path = os.path.join(relative_dir, filename) if relative_dir else filename
+
+                        print(f"  Processing: {relative_file_path}...")
+
+                        # Process the individual file
+                        output_chunk = process_python_file(full_path, filename)
+
+                        if output_chunk is not None:
+                            outfile.write(output_chunk)
+                            processed_count += 1
+                        else:
+                            # Error message was already printed by process_python_file
+                            skipped_count += 1
+
+            print("Directory traversal complete.")
+            return processed_count, skipped_count
+
+    except IOError as e:
+        print(f"Error: Could not open output file {output_file_path} for writing: {e}", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred during codebase processing: {e}", file=sys.stderr)
+        return None
+
+
+# --- Argument Parsing and Main Execution ---
+
+def parse_arguments():
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Concatenate all Python files in a directory tree into a single file, adding filename headers.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter # Shows defaults in help
+    )
+    parser.add_argument(
+        "root_dir",
+        help="Path to the root directory of the Python codebase."
+    )
+    parser.add_argument(
+        "output_file",
+        help="Path to the output file where the concatenated code will be saved."
+    )
+    parser.add_argument(
+        "--skip",
+        nargs='+',
+        default=DEFAULT_SKIP_DIRS,
+        help="List of directory names to skip (e.g., venv __pycache__ .git)."
+    )
+    return parser.parse_args()
+
+def main():
+    """Main execution function."""
+    args = parse_arguments()
+
+    # Convert skip list to a set for efficient lookup
+    skip_set = set(args.skip)
+
+    # Validate root directory exists
+    if not os.path.isdir(args.root_dir):
+        print(f"Error: Root directory not found or not a directory: {args.root_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate output file's directory exists (optional but good practice)
+    output_dir = os.path.dirname(args.output_file)
+    if output_dir and not os.path.isdir(output_dir):
+         try:
+             os.makedirs(output_dir)
+             print(f"Created output directory: {output_dir}")
+         except OSError as e:
+             print(f"Error: Could not create output directory {output_dir}: {e}", file=sys.stderr)
+             sys.exit(1)
+
+
+    print("-" * 60)
+    print("Starting Python Codebase Dump")
+    print("-" * 60)
+    print(f"Source Root:      {os.path.abspath(args.root_dir)}")
+    print(f"Output File:      {os.path.abspath(args.output_file)}")
+    print(f"Skipping Dirs:    {', '.join(sorted(list(skip_set)))}")
+    print("-" * 60)
+
+    # Process the codebase
+    result = process_codebase(args.root_dir, args.output_file, skip_set)
+
+    print("-" * 60)
+    if result is not None:
+        processed_count, skipped_count = result
+        print("Dump Generation Summary:")
+        print(f"  Successfully processed files: {processed_count}")
+        print(f"  Skipped files due to errors:  {skipped_count}")
+        print(f"  Output saved to:              {os.path.abspath(args.output_file)}")
+        print("Dump complete.")
+        sys.exit(0)
+    else:
+        print("Dump generation failed due to errors (see messages above).")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+
+# --- End of file: dump_codebase.py ---
+
+# generate_puzzles.py
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import pandas as pd
+from dotenv import load_dotenv
+
+from parameters import BASE_RATING, TARGET_RATING
+from src.csv_utils import sort_csv
+from src.logger import logger
+from src.walker import generate_and_save_puzzles
+
+load_dotenv()  # Load variables from .env file
+
+# Ensure output directory exists
+os.makedirs("output", exist_ok=True)
+
+
+def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments.
+
+    Returns:
+        argparse.Namespace: The parsed arguments.
+    """
+    parser = argparse.ArgumentParser(description="Chess Divergence Puzzle Generator")
+    parser.add_argument("--num_walks", type=int, default=10, help="Number of walks to generate (default: 10)")
+    return parser.parse_args()
+
+
+def count_puzzles(csv_path: str = "output/puzzles.csv") -> int:
+    """
+    Count the number of unique puzzles in the CSV file based on PuzzleIdx.
+
+    Args:
+        csv_path (str): Path to the CSV file.
+
+    Returns:
+        int: Number of unique puzzles.
+    """
+    if not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0:
+        return 0  # Return 0 if file doesn't exist or is empty
+
+    try:
+        df = pd.read_csv(csv_path, index_col=[0, 1, 2])  # Expect three-level index: Cohort, Row, PuzzleIdx
+        count = len(df.index.get_level_values("PuzzleIdx").unique())
+        logger.debug(f"Counted {count} puzzles.")
+        return count
+    except Exception as e:
+        logger.error(f"Error reading puzzles.csv: {e}. Assuming 0 puzzles.")
+        return 0
+
+
+def main(num_walks: int = 10) -> None:
+    """
+    Main function to orchestrate the puzzle generation process.
+
+    Args:
+        num_walks (int): Number of walks to generate.
+    """
+    logger.info(f"Starting puzzle generation with {num_walks} walks")
+    logger.info(f"Base rating: {BASE_RATING}, Target rating: {TARGET_RATING}")
+
+    # Migrate existing puzzles.csv to three-level index if needed
+    if os.path.exists("output/puzzles.csv") and os.path.getsize("output/puzzles.csv") > 0:
+        try:
+            df = pd.read_csv("output/puzzles.csv")
+            # Check if the CSV already has the correct three-level index
+            if len(df.columns) > 0 and df.columns[0] != "Move":  # If first column isn't "Move", it has index columns
+                df = pd.read_csv("output/puzzles.csv", index_col=[0, 1])
+                if "PuzzleIdx" in df.columns:
+                    df = df.reset_index()
+                    df = df.set_index(["Cohort", "Row", "PuzzleIdx"])
+                    df.to_csv("output/puzzles.csv")
+                    logger.info("Migrated puzzles.csv to three-level index (Cohort, Row, PuzzleIdx).")
+        except Exception as e:
+            logger.warning(f"Failed to migrate puzzles.csv: {e}. Starting fresh.")
+            os.remove("output/puzzles.csv")  # Remove corrupted file to start fresh
+
+    # Count existing puzzles from the single CSV
+    initial_puzzle_count = count_puzzles()
+    logger.info(f"Found {initial_puzzle_count} existing puzzles")
+
+    # Track new puzzles to report count at the end
+    new_puzzles_count = 0
+    for i in range(num_walks):
+        logger.info(f"Generating walk {i+1}/{num_walks}")
+        puzzles = generate_and_save_puzzles(BASE_RATING, TARGET_RATING)
+        walk_puzzle_count = len(puzzles)
+        new_puzzles_count += walk_puzzle_count
+        logger.debug(f"Walk {i+1} added {walk_puzzle_count} puzzles. Running total: {new_puzzles_count}")
+        if not puzzles:
+            logger.warning(f"No puzzles generated for walk {i+1}")
+            continue
+
+    # Sort the puzzles.csv file by rating cohort pair
+    sort_csv()
+    logger.info("Sorted puzzles.csv by rating cohort pair")
+
+    # Count total puzzles after generation
+    total_puzzle_count = count_puzzles()
+    logger.debug(
+        f"Initial puzzles: {initial_puzzle_count}, New puzzles: {new_puzzles_count}, Total puzzles: {total_puzzle_count}"
+    )
+
+    if new_puzzles_count > 0:
+        logger.info(f"Added {new_puzzles_count} new puzzles (total: {total_puzzle_count})")
+    else:
+        logger.warning("No new puzzles were generated")
+
+
+if __name__ == "__main__":
+    logger.info("=== Starting Chess Divergence Puzzle Generator ===")
+    args = parse_args()
+    main(num_walks=args.num_walks)
+    logger.info("=== Finished Chess Divergence Puzzle Generator ===")
+
+# --- End of file: generate_puzzles.py ---
+
+# migrate_csv.py
+import os
+
+import pandas as pd
+
+# Path to the old CSV file
+csv_path = "output/puzzles.csv"
+
+if not os.path.exists(csv_path):
+    print("CSV file not found:", csv_path)
+    exit(1)
+
+# Load the CSV with the multi-index (Cohort, Row, PuzzleIdx)
+try:
+    df = pd.read_csv(csv_path, index_col=[0, 1, 2])
+except Exception as e:
+    print("Error loading CSV:", e)
+    exit(1)
+
+# Check if the new column 'CohortPair' exists.
+if "CohortPair" not in df.columns:
+    # For the old CSV, all puzzles are for 1200 vs 1600, so use that as the default.
+    df["CohortPair"] = "1200-1600"
+    print("Added 'CohortPair' column with default value '1200-1600'.")
+else:
+    print("'CohortPair' column already exists.")
+
+# Choose whether to overwrite the existing file or write to a new file.
+output_path = "output/puzzles_migrated.csv"  # or csv_path to overwrite
+df.to_csv(output_path)
+print("Migration complete. Updated CSV saved to", output_path)
+
+# --- End of file: migrate_csv.py ---
+
+# aggregate.py
+import glob
+import json
+import logging
+from pathlib import Path
+
+from dotenv import load_dotenv
+from openai import OpenAI
+
+from summarizer.config import CONFIG, MAIN_MODEL, PRELIMINARY_MODEL
+
+# Set up logging configuration
+logging.basicConfig(
+    level=logging.INFO,  # Change to logging.DEBUG to see more detailed logs
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+# Load environment variables (e.g., OPENAI_API_KEY) from .env
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+client = OpenAI()
+
+SYSTEM_PRELIMINARY = """
+You are a summarizer. Return only a markdown summary of the folder's purpose.
+"""
+
+SYSTEM_MERMAID = """
+You are an expert at creating high-level Mermaid flowcharts.
+Group related functions into subgraphs.
+Use only function names (no file paths), and draw arrows for import/function dependencies.
+Return only the Mermaid code.
+"""
+
+SYSTEM_COMBINED = """
+Using the folder's preliminary summary and its Mermaid diagram code, 
+produce one combined high-level Markdown summary that explains the folder's purpose 
+and how all components fit together.
+"""
+
+
+def load_summaries():
+    logger.info("Loading summaries from JSON files")
+    texts = []
+    for path in glob.glob(f"{CONFIG['paths']['summaries_dir']}/*.json"):
+        logger.debug(f"Reading summary file: {path}")
+        data = json.load(open(path, "r"))
+        texts.append(data.get("summary", json.dumps(data)))
+    logger.info(f"Loaded {len(texts)} summary files")
+    return "\n\n".join(texts)
+
+
+def call_llm(system: str, user: str, model: str) -> str:
+    logger.info("Making LLM API call")
+    logger.debug(f"System prompt: {system[:100]}...")
+    logger.debug(f"User prompt length: {len(user)} characters")
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        temperature=0.0,
+    )
+    logger.debug("Received response from LLM")
+    return resp.choices[0].message.content.strip()
+
+
+def main():
+    logger.info("Starting aggregation process")
+    combined = load_summaries()
+
+    reports = Path(CONFIG["paths"]["reports_dir"])
+    reports.mkdir(exist_ok=True)
+    logger.info(f"Created/verified reports directory: {reports}")
+
+    dir_name = Path(CONFIG["paths"]["src_dir"]).name
+
+    logger.info("Generating preliminary summary")
+    preliminary = call_llm(SYSTEM_PRELIMINARY, combined, model=PRELIMINARY_MODEL)
+
+    logger.info("Generating Mermaid diagram")
+    mermaid = call_llm(SYSTEM_MERMAID, combined, model=MAIN_MODEL)
+    (reports / f"{dir_name}_flow.mmd").write_text(mermaid + "\n")
+    logger.debug("Wrote Mermaid diagram to file")
+
+    logger.info("Generating combined summary")
+    combined = call_llm(SYSTEM_COMBINED, f"{preliminary}\n\n{mermaid}", model=MAIN_MODEL)
+    (reports / f"{dir_name}_summary.md").write_text(combined + "\n")
+    logger.debug("Wrote combined summary to file")
+
+    logger.info("Aggregation process completed successfully")
+
+
+if __name__ == "__main__":
+    main()
+
+# --- End of file: aggregate.py ---
+
+# config.py
+from pathlib import Path
+
+import yaml
+
+CONFIG = yaml.safe_load(Path("configs/summarizer.yaml").read_text())
+PRELIMINARY_MODEL = "gpt-4o-mini"
+MAIN_MODEL = "gpt-4o"
+
+# --- End of file: config.py ---
+
+# extract_summary.py
+import ast
+import json
+from pathlib import Path
+
+
+def extract_code_info(filepath: Path) -> dict:
+    try:
+        tree = ast.parse(filepath.read_text(), filename=str(filepath))
+    except SyntaxError as e:
+        return {"path": str(filepath), "error": f"SyntaxError: {e}"}
+
+    info = {"path": str(filepath), "imports": [], "classes": [], "functions": []}
+    current_class = None
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                info["imports"].append(alias.name)
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            for alias in node.names:
+                info["imports"].append(f"{module}.{alias.name}")
+        if isinstance(node, ast.ClassDef):
+            current_class = node
+            info["classes"].append(
+                {
+                    "name": node.name,
+                    "doc": ast.get_docstring(node) or "",
+                    "methods": [extract_function_data(m) for m in node.body if isinstance(m, ast.FunctionDef)],
+                }
+            )
+        if isinstance(node, ast.FunctionDef):
+            if current_class is None:  # Only add standalone functions
+                info["functions"].append(extract_function_data(node))
+            current_class = None  # Reset class context after processing function
+
+    return info
+
+
+def extract_function_data(node):
+    return {
+        "name": node.name,
+        "doc": ast.get_docstring(node) or "",
+        "args": [arg.arg for arg in node.args.args],
+        "decorators": [d.id if isinstance(d, ast.Name) else ast.unparse(d) for d in node.decorator_list],
+        "returns": ast.unparse(node.returns) if node.returns else None,
+    }
+
+
+def main():
+    base = Path("src")
+    summaries = []
+    for py in base.rglob("*.py"):
+        summaries.append(extract_code_info(py))
+    out = Path("summaries")
+    out.mkdir(exist_ok=True)
+    for info in summaries:
+        fname = out / (Path(info["path"]).stem + ".json")
+        fname.write_text(json.dumps(info, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+
+# --- End of file: extract_summary.py ---
+
+# summarize.py
+from summarizer.aggregate import main as aggregate_main
+from summarizer.extract_summary import main as extract_main
+
+if __name__ == "__main__":
+    extract_main()
+    aggregate_main()
+
+# --- End of file: summarize.py ---
+
+# __init__.py
+
+# --- End of file: __init__.py ---
+
+# api.py
+import sys
+import time
+
+import requests
+
+from parameters import MIN_GAMES, RATE_LIMIT_DELAY
+from src.logger import logger
+
+sys.path.append("..")  # Add parent directory to path
+
+
+def get_move_stats(fen, rating, top_n=None) -> tuple[list[dict], int]:
+    """
+    Fetches move statistics for a given FEN and rating range from the Lichess Explorer API.
+
+    Args:
+        fen (str): Position in FEN notation.
+        rating (str): Rating band (e.g., "2000" or "1400-1600").
+
+    Returns:
+        tuple: (list of move dictionaries, total games) or (None, 0) if data is unavailable or invalid.
+    """
+    # Convert rating to Lichess API format (e.g., "1400-1600" -> "1400,1600")
+    if "-" in rating:
+        rating = rating.replace("-", ",")
+
+    # Validate FEN (basic check for minimum fields)
+    fen_fields = fen.split()
+    if len(fen_fields) < 6:
+        logger.warning(f"Invalid FEN string: {fen}")
+        return None, 0
+
+    active_color = fen_fields[1]  # Extract active color (second field)
+    if active_color not in ["w", "b"]:
+        logger.warning(f"Invalid active color in FEN: {fen}")
+        return None, 0
+
+    url = "https://explorer.lichess.ovh/lichess"
+    params = {"fen": fen, "ratings": rating, "variant": "standard", "speeds": "blitz,rapid,classical", "topGames": 0}
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()  # This will raise RequestException for HTTP errors (e.g., 404)
+        data = response.json()
+        moves = data.get("moves", [])
+        if not moves:
+            logger.warning(f"No moves data for {fen} at rating {rating}")
+            return None, 0
+
+        total_games = sum(m["white"] + m["draws"] + m["black"] for m in moves)
+        if total_games < MIN_GAMES:
+            logger.warning(f"Insufficient games ({total_games}) for {fen} at rating {rating}")
+            return None, 0
+
+        move_stats = []
+        for move in moves:
+            total = move["white"] + move["draws"] + move["black"]
+            if total > 0:
+                win_rate = move["white"] / total if active_color == "w" else move["black"] / total
+                draw_rate = move["draws"] / total
+                loss_rate = move["black"] / total if active_color == "w" else move["white"] / total
+                # After we compute 'total' for each move...
+                move_stats.append(
+                    {
+                        "uci": move["uci"],
+                        "freq": total / total_games,
+                        "win_rate": win_rate,
+                        "draw_rate": draw_rate,
+                        "loss_rate": loss_rate,
+                        "games_white": move["white"],
+                        "games_draws": move["draws"],
+                        "games_black": move["black"],
+                        "games_total": total,
+                    }
+                )
+
+        if not move_stats:  # If no valid moves after processing
+            logger.warning(f"No valid move stats for {fen} at rating {rating}")
+            return None, 0
+
+        sorted_moves = sorted(move_stats, key=lambda x: x["freq"], reverse=True)
+        if top_n:
+            sorted_moves = sorted_moves[:top_n]
+        time.sleep(RATE_LIMIT_DELAY)  # Apply rate limiting
+        return sorted_moves, total_games
+    except (requests.RequestException, ValueError) as e:
+        logger.error(f"API or JSON error for {fen} at rating {rating}: {e}")
+        return None, 0
+
+# --- End of file: api.py ---
+
+# chess_utils.py
+import chess
+import chess.svg
+
+
+def uci_to_san(fen: str, uci_move: str) -> str:
+    """
+    Convert a UCI move to Standard Algebraic Notation (SAN).
+    Args:
+        fen (str): The FEN of the position.
+        uci_move (str): A UCI move string for the base cohort (e.g. "e2e4").
+
+    Returns:
+        str: The SAN of the move.
+    """
+    board = chess.Board(fen)
+    try:
+        move_obj = chess.Move.from_uci(uci_move)
+        if move_obj in board.legal_moves:
+            # Compute SAN before pushing the move.
+            san = board.san(move_obj)
+            return san
+    except Exception:
+        pass
+    return uci_move
+
+
+def generate_board_svg_with_arrows(fen: str, base_uci: str = None, target_uci: str = None, size: int = 500) -> str:
+    """
+    Returns an SVG string representing a chess board from the given FEN.
+    Optionally draws two arrows:
+      - base_uci (red arrow) for the Base Cohort's top move
+      - target_uci (blue arrow) for the Target Cohort's top move
+
+    Args:
+        fen (str): The FEN of the position.
+        base_uci (str): A UCI move string for the base cohort (e.g. "e2e4").
+        target_uci (str): A UCI move string for the target cohort (e.g. "c7c5").
+        size (int): The size (in pixels) of the rendered board.
+
+    Returns:
+        str: An SVG string with the board image and any requested arrows.
+    """
+    board = chess.Board(fen)
+    # Orient the board to the active player
+    orientation = chess.WHITE if board.turn else chess.BLACK
+
+    arrows = []
+    if base_uci:
+        try:
+            base_move = chess.Move.from_uci(base_uci)
+            # Optionally check if move is legal: if base_move in board.legal_moves: ...
+            # Red arrow
+            arrows.append(chess.svg.Arrow(base_move.from_square, base_move.to_square, color="#FF0000"))
+        except ValueError:
+            pass  # If the UCI is invalid, we just skip drawing
+
+    if target_uci:
+        try:
+            target_move = chess.Move.from_uci(target_uci)
+            # Blue arrow
+            arrows.append(chess.svg.Arrow(target_move.from_square, target_move.to_square, color="#0000FF"))
+        except ValueError:
+            pass
+
+    # Generate the SVG with the requested arrows
+    svg_code = chess.svg.board(board=board, size=size, orientation=orientation, arrows=arrows)
+    return svg_code
+
+# --- End of file: chess_utils.py ---
+
+# csv_utils.py
+import pandas as pd
+
+
+def sort_csv(input_path: str = "output/puzzles.csv", output_path: str = "output/puzzles.csv") -> None:
+    """
+    Reads a CSV file from input_path, sorts the rows by the lower bound of the rating
+    in the 'CohortPair' column, and writes the sorted DataFrame to output_path.
+
+    Parameters:
+        input_path (str): Path to the input CSV file.
+        output_path (str): Path where the sorted CSV file will be saved. Defaults to in place.
+    """
+    # Load the CSV file into a DataFrame
+    df = pd.read_csv(input_path)
+
+    # Create a helper column 'lower_bound' by extracting the lower rating from 'CohortPair'
+    df["lower_bound"] = df["CohortPair"].apply(lambda x: int(x.split("-")[0]))
+
+    # Sort the DataFrame by the 'lower_bound'
+    df.sort_values(by="lower_bound", inplace=True)
+
+    # Optionally, remove the helper column if no longer needed
+    df.drop(columns=["lower_bound"], inplace=True)
+
+    # Write the sorted DataFrame back to a CSV file
+    df.to_csv(output_path, index=False)
+
+# --- End of file: csv_utils.py ---
+
+# divergence.py
+import pandas as pd
+from scipy.stats import chi2_contingency
+from statsmodels.stats.proportion import proportions_ztest
+
+from parameters import MIN_GAMES, MIN_WIN_RATE_DELTA
+from src.api import get_move_stats
+from src.logger import logger
+
+
+def build_move_df(moves: list) -> pd.DataFrame:
+    """
+    Convert raw move data into a DataFrame.
+    Args:
+        moves (list): A list of dictionaries containing move data.
+
+    Returns:
+        pd.DataFrame: A DataFrame with the move data.
+    """
+    return pd.DataFrame(
+        [
+            {
+                "Move": move["uci"],
+                "Games": move["games_total"],
+                "White %": move["win_rate"] * 100,
+                "Draw %": move["draw_rate"] * 100,
+                "Black %": move["loss_rate"] * 100,
+                "Freq": move["freq"],
+            }
+            for move in moves
+        ]
+    )
+
+
+def check_frequency_divergence(
+    base_df: pd.DataFrame, target_df: pd.DataFrame, p_threshold: float = 0.10
+) -> tuple[bool, float]:
+    """
+    Perform chi-square test to check if move frequencies differ significantly.
+    Args:
+        base_df (pd.DataFrame): The base cohort move data.
+        target_df (pd.DataFrame): The target cohort move data.
+        p_threshold (float): The significance level for the chi-square test.
+
+    Returns: tuple[bool, float]: A tuple containing a boolean indicating if there is a significant difference in move frequencies and the p-value of the chi-square test.
+    """
+    all_moves = set(base_df["Move"]).union(set(target_df["Move"]))
+    contingency = pd.DataFrame(index=list(all_moves), columns=["Base", "Target"]).fillna(0)
+    for move in all_moves:
+        base_games = base_df[base_df["Move"] == move]["Games"].sum() if move in base_df["Move"].values else 0
+        target_games = target_df[target_df["Move"] == move]["Games"].sum() if move in target_df["Move"].values else 0
+        contingency.loc[move, "Base"] = base_games
+        contingency.loc[move, "Target"] = target_games
+    contingency = contingency.astype(float)
+    chi2, p_value, dof, expected = chi2_contingency(contingency)
+    return p_value < p_threshold, p_value
+
+
+def check_win_rate_difference(
+    base_df: pd.DataFrame, target_df: pd.DataFrame, move: str, p_threshold: float = 0.10, min_games: int = 5
+) -> tuple[bool, float]:
+    """
+    Perform Z-test to check if win rate for a move differs significantly.
+    Args:
+        base_df (pd.DataFrame): The base cohort move data.
+        target_df (pd.DataFrame): The target cohort move data.
+        move (str): The move to check.
+        p_threshold (float): The significance level for the Z-test.
+        min_games (int): The minimum number of games to consider a move.
+
+    Returns: tuple[bool, float]: A tuple containing a boolean indicating if the target move outperforms the base move and the p-value of the Z-test.
+    """
+    base_row = base_df[base_df["Move"] == move].iloc[0] if move in base_df["Move"].values else None
+    target_row = target_df[target_df["Move"] == move].iloc[0] if move in target_df["Move"].values else None
+    if base_row is None or target_row is None or base_row["Games"] < min_games or target_row["Games"] < min_games:
+        return False, None
+    base_wins = base_row["White %"] * base_row["Games"] / 100
+    target_wins = target_row["White %"] * target_row["Games"] / 100
+    count = [base_wins, target_wins]
+    nobs = [base_row["Games"], target_row["Games"]]
+    stat, p_value = proportions_ztest(count, nobs, alternative="two-sided")
+    target_better = p_value < p_threshold and target_row["White %"] > base_row["White %"]
+    return target_better, p_value
+
+
+def find_divergence(fen: str, base_rating: str, target_rating: str, p_threshold: float = 0.10) -> dict | None:
+    """
+    Find positions where the target cohort’s top move outperforms the base cohort’s top move when played by the base cohort.
+    Args:
+        fen (str): The FEN of the position.
+        base_rating (str): The base rating.
+        target_rating (str): The target rating.
+        p_threshold (float): The significance level for the Z-test.
+
+    Returns: dict | None: A dictionary containing the divergence information if a divergence is detected, otherwise None.
+    """
+    logger.info(f"Analyzing position for divergence between ratings {base_rating} and {target_rating}")
+    logger.debug(f"Position: {fen}")
+    base_moves, base_total = get_move_stats(fen, base_rating)
+    target_moves, target_total = get_move_stats(fen, target_rating)
+    if not base_moves or not target_moves:
+        logger.warning(f"No moves data for {fen} at rating {base_rating if not base_moves else target_rating}")
+        return None
+    if base_total < MIN_GAMES or target_total < MIN_GAMES:
+        logger.warning(f"Insufficient games: base={base_total}, target={target_total}, min required={MIN_GAMES}")
+        return None
+    base_df = build_move_df(base_moves)
+    target_df = build_move_df(target_moves)
+    logger.debug(f"Base DataFrame:\n{base_df}")
+    logger.debug(f"Target DataFrame:\n{target_df}")
+    freq_differs, p_freq = check_frequency_divergence(base_df, target_df, p_threshold)
+    logger.info(f"Chi-square p-value for frequency: {p_freq:.4f} (significant: {freq_differs})")
+    if not freq_differs:
+        logger.info("No significant frequency divergence")
+        return None
+    base_df = base_df.sort_values(by="Freq", ascending=False)
+    target_df = target_df.sort_values(by="Freq", ascending=False)
+    top_base_move = base_df.iloc[0]["Move"]
+    top_target_move = target_df.iloc[0]["Move"]
+    if top_base_move == top_target_move:
+        logger.info("No divergence - same top move in both rating bands")
+        return None
+    # Compare target move’s win rate to base’s top move win rate in base cohort
+    base_top_win = base_df.iloc[0]["White %"]
+    base_win = (
+        base_df[base_df["Move"] == top_target_move]["White %"].iloc[0]
+        if top_target_move in base_df["Move"].values
+        else 0
+    )
+    base_games = (
+        base_df[base_df["Move"] == top_target_move]["Games"].iloc[0] if top_target_move in base_df["Move"].values else 0
+    )
+    target_win = target_df[target_df["Move"] == top_target_move]["White %"].iloc[0]  # For logging only
+    if (
+        base_win - base_top_win >= MIN_WIN_RATE_DELTA and base_games >= 5
+    ):  # Target move beats base’s top move in base cohort
+        logger.info(
+            f"Base cohort win rate for top move {top_base_move}: {base_top_win:.2f}%, "
+            f"Base cohort win rate for {top_target_move}: {base_win:.2f}% (games: {base_games}), "
+            f"Target cohort win rate: {target_win:.2f}%"
+        )
+        logger.info(f"Divergence detected! Target prefers {top_target_move}, outperforms base top move")
+        return {
+            "fen": fen,
+            "base_rating": base_rating,
+            "target_rating": target_rating,
+            "base_df": base_df,
+            "target_df": target_df,
+            "top_base_move": top_base_move,
+            "top_target_move": top_target_move,
+            "p_freq": p_freq,
+            "base_win_for_target_move": base_win,
+            "base_win_for_top_move": base_top_win,
+        }
+    logger.info(
+        f"Target move {top_target_move} not better than base top move {top_base_move}: "
+        f"base win rate={base_win:.2f}%, base top win rate={base_top_win:.2f}%, games={base_games}"
+    )
+    return None
+
+# --- End of file: divergence.py ---
+
+# logger.py
+import logging
+import logging.handlers
+import os
+import sys
+from datetime import datetime
+
+# Create logs directory if it doesn't exist
+logs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+if not os.path.exists(logs_dir):
+    os.makedirs(logs_dir)
+
+
+# Set up logging
+def setup_logger() -> logging.Logger:
+    """
+    Set up a logger with a memory handler to store recent logs and a file handler to save logs to a file.
+    Returns:
+        logging.Logger: The configured logger.
+    """
+    logger = logging.getLogger("chess_divergence")
+    logger.setLevel(logging.DEBUG)
+
+    # Memory handler to store recent logs
+    memory_handler = logging.handlers.MemoryHandler(capacity=100)  # Store last 100 log records
+    memory_handler.setLevel(logging.DEBUG)
+    memory_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    memory_handler.setFormatter(memory_format)
+    logger.addHandler(memory_handler)
+
+    # File handler for debug and above
+    log_filename = os.path.join(logs_dir, f'chess_divergence_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+    file_handler = logging.FileHandler(log_filename)
+    file_handler.setLevel(logging.DEBUG)
+    file_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(file_format)
+
+    # Console handler for info and above
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_format = logging.Formatter("%(levelname)s: %(message)s")
+    console_handler.setFormatter(console_format)
+
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+# Create and export logger
+logger = setup_logger()
+
+# --- End of file: logger.py ---
+
+# walker.py
+import os
+import random
+import sys
+
+import chess
+import pandas as pd
+
+from parameters import MAX_PLY, MIN_GAMES, MIN_PLY, STARTING_FEN, TEMPERATURE
+from src.api import get_move_stats
+from src.divergence import find_divergence
+from src.logger import logger
+
+# Add parent directory to path
+sys.path.append("..")
+
+
+def choose_weighted_move(fen: str, base_rating: str, temperature: float = TEMPERATURE) -> str | None:
+    """
+    Retrieves the top moves for the given position and chooses one based on dynamically computed weights
+    from the move frequencies, optionally using temperature scaling.
+
+    Args:
+        fen (str): Position in FEN notation.
+        base_rating (str): Rating band to use for move selection.
+        temperature (float): Temperature parameter to control randomness. Default is 1.0.
+
+    Returns:
+        str or None: The chosen move in UCI format, or None if insufficient data.
+    """
+    moves, total = get_move_stats(fen, base_rating)
+    if not moves or total < MIN_GAMES:
+        logger.warning(f"Insufficient data: moves={bool(moves)}, total={total}")
+        return None
+
+    # Use the frequency values to derive weights
+    frequencies = [move["freq"] for move in moves]
+
+    # Apply temperature scaling:
+    # If temperature > 1, the distribution flattens (more randomness)
+    # If temperature < 1, the distribution sharpens (more deterministic)
+    scaled_weights = [f ** (1 / temperature) for f in frequencies]
+
+    # Normalize weights so they sum to 1
+    total_weight = sum(scaled_weights)
+    normalized_weights = [w / total_weight for w in scaled_weights]
+
+    move_choices = [move["uci"] for move in moves]
+    chosen_move = random.choices(move_choices, weights=normalized_weights, k=1)[0]
+
+    logger.debug(
+        f"Moves: {[(m['uci'], m['freq']) for m in moves]}, Scaled Weights: {normalized_weights}, Selected move: {chosen_move}"
+    )
+    return chosen_move
+
+
+def evaluate_divergence(fen: str, base_rating: str, target_rating: str, ply: int) -> dict | None:
+    """
+    Evaluates the current position for divergence between rating cohorts.
+
+    Args:
+        fen (str): The current position in FEN.
+        base_rating (str): Rating band used for base move statistics.
+        target_rating (str): Rating band used for target move statistics.
+        ply (int): Current ply number.
+
+    Returns:
+        dict or None: Divergence dictionary if found, else None
+    """
+    logger.debug(f"Evaluating divergence at ply {ply}")
+    divergence = find_divergence(fen, base_rating, target_rating)
+    if divergence:
+        logger.debug(
+            f"Snapshot at ply {ply}: divergence found with top_base_move={divergence['top_base_move']}, top_target_move={divergence['top_target_move']}"
+        )
+        return divergence
+    else:
+        logger.info(f"Snapshot at ply {ply}: no divergence found")
+        return None
+
+
+def validate_initial_position(fen: str, base_rating: str, target_rating: str) -> bool:
+    """
+    Validates that the initial position has sufficient move data for both cohorts.
+
+    Args:
+        fen (str): The initial position in FEN.
+        base_rating (str): Rating band for base cohort.
+        target_rating (str): Rating band for target cohort.
+
+    Returns:
+        bool: True if the position has sufficient data, False otherwise.
+    """
+    base_moves, base_total = get_move_stats(fen, base_rating)
+    target_moves, target_total = get_move_stats(fen, target_rating)
+    if not base_moves or not target_moves or base_total < MIN_GAMES or target_total < MIN_GAMES:
+        logger.warning(f"Insufficient initial data for FEN {fen}: base_total={base_total}, target_total={target_total}")
+        return False
+    return True
+
+
+def create_puzzle_data(divergence: dict, base_rating: str, target_rating: str, ply: int) -> dict:
+    """
+    Creates a dictionary containing puzzle data for the given divergence.
+
+    Args:
+        divergence (dict): Divergence data containing base_df, target_df, and fen.
+        base_rating (str): Rating band for base cohort.
+        target_rating (str): Rating band for target cohort.
+        ply (int): Current ply number.
+
+    Returns:
+        dict: Puzzle data dictionary.
+    """
+    cohort_pair = f"{base_rating}-{target_rating}"
+    return {
+        "fen": divergence["fen"],
+        "base_rating": base_rating,
+        "target_rating": target_rating,
+        "CohortPair": cohort_pair,
+        "ply": ply,
+        "base_top_moves": divergence["base_df"]["Move"].tolist(),
+        "base_freqs": divergence["base_df"]["Freq"].tolist(),
+        "base_wdls": list(
+            zip(
+                divergence["base_df"]["White %"] / 100,
+                divergence["base_df"]["Draw %"] / 100,
+                divergence["base_df"]["Black %"] / 100,
+            )
+        ),
+        "target_top_moves": divergence["target_df"]["Move"].tolist(),
+        "target_freqs": divergence["target_df"]["Freq"].tolist(),
+        "target_wdls": list(
+            zip(
+                divergence["target_df"]["White %"] / 100,
+                divergence["target_df"]["Draw %"] / 100,
+                divergence["target_df"]["Black %"] / 100,
+            )
+        ),
+    }
+
+
+def build_puzzle_dataframe(
+    divergence: dict, fen: str, base_rating: str, target_rating: str, puzzle_idx: int, ply: int
+) -> pd.DataFrame:
+    """
+    Builds a DataFrame for the puzzle with base and target cohort data.
+
+    Args:
+        divergence (dict): Divergence data containing base_df and target_df.
+        fen (str): The FEN of the position.
+        base_rating (str): Rating band for base cohort.
+        target_rating (str): Rating band for target cohort.
+        puzzle_idx (int): Index of the puzzle.
+        ply (int): Current ply number.
+
+    Returns:
+        pd.DataFrame: Combined DataFrame with base and target cohort data, indexed by Cohort, Row, and PuzzleIdx.
+    """
+    cohort_pair = f"{base_rating}-{target_rating}"
+
+    base_df = divergence["base_df"].assign(
+        FEN=fen,
+        Rating=base_rating,
+        PuzzleIdx=puzzle_idx,
+        Ply=ply,
+        CohortPair=cohort_pair,
+    )
+    target_df = divergence["target_df"].assign(
+        FEN=fen,
+        Rating=target_rating,
+        PuzzleIdx=puzzle_idx,
+        Ply=ply,
+        CohortPair=cohort_pair,
+    )
+    puzzle_df = pd.concat([base_df, target_df], keys=["base", "target"])
+    puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
+    puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
+    return puzzle_df
+
+
+def save_puzzle_to_csv(puzzle_df: pd.DataFrame, output_path: str = "output/puzzles.csv"):
+    """
+    Saves the puzzle DataFrame to a CSV file, appending to existing data if it exists,
+    and skipping rows with duplicate FENs (for the same CohortPair).
+
+    Args:
+        puzzle_df (pd.DataFrame): DataFrame containing puzzle data.
+        output_path (str): Path to the output CSV file.
+    """
+    # If the incoming DataFrame already has PuzzleIdx in its index, reset it (dropping it)
+    if "PuzzleIdx" in puzzle_df.index.names:
+        puzzle_df = puzzle_df.reset_index(level="PuzzleIdx", drop=True)
+
+    if os.path.exists(output_path):
+        try:
+            existing_df = pd.read_csv(output_path, index_col=[0, 1, 2])
+            max_existing_idx = existing_df.index.get_level_values("PuzzleIdx").max() if not existing_df.empty else -1
+            logger.debug(f"Max existing PuzzleIdx: {max_existing_idx}")
+            puzzle_idx = max_existing_idx + 1
+
+            # Reset index for new data: since puzzle_df no longer has PuzzleIdx as a column,
+            # add it now.
+            puzzle_df["PuzzleIdx"] = puzzle_idx
+            puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
+            puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
+
+            # Check for duplicate FENs within the same CohortPair
+            if not existing_df.empty and "FEN" in existing_df.columns and "CohortPair" in existing_df.columns:
+                duplicate_mask = puzzle_df.apply(
+                    lambda row: (
+                        (existing_df["FEN"] == row["FEN"]) & (existing_df["CohortPair"] == row["CohortPair"])
+                    ).any(),
+                    axis=1,
+                )
+                if duplicate_mask.any():
+                    duplicate_fens = puzzle_df.loc[duplicate_mask, "FEN"].unique()
+                    logger.info(
+                        f"Skipping {len(duplicate_fens)} rows with duplicate FENs in the same cohort pair: {duplicate_fens}"
+                    )
+                    puzzle_df = puzzle_df[~duplicate_mask]
+            # Concatenate new rows if any remain
+            if not puzzle_df.empty:
+                puzzle_df = pd.concat([existing_df, puzzle_df])
+            else:
+                puzzle_df = existing_df
+        except Exception as e:
+            logger.warning(f"Error loading existing puzzles.csv: {e}. Overwriting.")
+            puzzle_df = puzzle_df.copy()
+            puzzle_df["PuzzleIdx"] = 0
+            puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
+            puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
+    else:
+        # File does not exist: assign initial PuzzleIdx 0.
+        puzzle_df = puzzle_df.copy()
+        puzzle_df["PuzzleIdx"] = 0
+        puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
+        puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
+    puzzle_df.to_csv(output_path)
+    logger.debug(
+        f"After saving, puzzles.csv has {len(puzzle_df.index.get_level_values('PuzzleIdx').unique())} unique PuzzleIdx values."
+    )
+
+
+def generate_and_save_puzzles(
+    base_rating: str, target_rating: str, min_ply: int = MIN_PLY, max_ply: int = MAX_PLY
+) -> list[dict]:
+    """
+    Generates puzzles by performing a random walk and saving positions with significant divergence.
+
+    Args:
+        base_rating (str): Rating band for base cohort.
+        target_rating (str): Rating band for target cohort.
+        min_ply (int): Minimum ply to start checking for divergence.
+        max_ply (int): Maximum ply for the random walk.
+
+    Returns:
+        list: List of puzzle data dictionaries.
+    """
+    logger.info(
+        f"Starting random walk with divergence: base_rating={base_rating}, "
+        f"target_rating={target_rating}, min_ply={min_ply}, max_ply={max_ply}"
+    )
+    board = chess.Board(STARTING_FEN)
+    fen = board.fen()
+    added_puzzles = []
+    logger.debug(f"Initial position: {fen}")
+
+    # Validate initial position
+    if not validate_initial_position(fen, base_rating, target_rating):
+        return added_puzzles
+
+    # Perform the random walk
+    for ply in range(max_ply):
+        logger.debug(f"Processing ply {ply+1}/{max_ply}")
+        move = choose_weighted_move(fen, base_rating)
+        if not move:
+            logger.warning(f"Aborting walk at ply {ply+1} due to insufficient data.")
+            break
+
+        board.push_uci(move)
+        fen = board.fen()
+        logger.debug(f"New position at ply {ply+1}: {fen[:30]}...")
+
+        # Skip divergence check if before min_ply
+        if ply < min_ply:
+            logger.debug(f"Skipping divergence check (ply {ply+1} < min_ply {min_ply})")
+            continue
+
+        # Evaluate divergence
+        divergence = evaluate_divergence(fen, base_rating, target_rating, ply + 1)
+        if divergence is None:
+            recent_logs = [record.getMessage() for record in logger.handlers[0].buffer[-5:]]
+            logger.debug(f"Recent logs: {recent_logs}")
+            if any("Missing move data" in msg for msg in recent_logs):
+                logger.warning(
+                    f"Aborting walk at ply {ply+1} due to missing move data for target rating {target_rating}"
+                )
+                break
+            logger.info(f"Snapshot at ply {ply+1}: no divergence found")
+            continue
+
+        # Save every divergence detected (no gap threshold!)
+        logger.info(f"Significant divergence found at ply {ply+1}")
+        puzzle_data = create_puzzle_data(divergence, base_rating, target_rating, ply + 1)
+        added_puzzles.append(puzzle_data)
+
+        # Build and save the puzzle DataFrame
+        puzzle_idx = len(added_puzzles) - 1
+        logger.debug(f"Assigning PuzzleIdx: {puzzle_idx}")
+        puzzle_df = build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_idx, ply + 1)
+        save_puzzle_to_csv(puzzle_df)
+
+        logger.info(f"Saved puzzle: {divergence['fen'][:20]}...")
+
+    # Log the result of the walk
+    if added_puzzles:
+        logger.info(f"Random walk completed with {len(added_puzzles)} puzzles saved to CSV")
+    else:
+        logger.info("Random walk completed without finding any significant divergence")
+    return added_puzzles
+
+# --- End of file: walker.py ---
+
