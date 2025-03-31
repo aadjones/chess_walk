@@ -26,29 +26,27 @@ def format_eval_for_display(numeric_eval, eval_type):
         except (ValueError, TypeError): return "Unknown"
 
 def display_stockfish_comparison(analysis_results, fen): # Added fen argument
-    """Displays the Stockfish analysis using markdown and columns for a clean look."""
+    """Displays the Stockfish analysis for Base vs Target using markdown and columns."""
     if not analysis_results:
         st.info("Stockfish analysis is not available or failed.")
         return
 
-    st.markdown("#### Stockfish Evaluation Comparison")
+    st.markdown("#### Cohort Move Evaluation") # Simplified Title
     st.caption("_(Eval after move, from White's perspective)_")
     st.write("") # Add a little vertical space
 
-    # Determine whose turn it is from FEN
     turn = None
     if fen:
         try:
             board = chess.Board(fen)
-            turn = board.turn # chess.WHITE (True) or chess.BLACK (False)
+            turn = board.turn
         except ValueError:
             st.warning("Invalid FEN provided, cannot determine turn for delta interpretation.")
-            turn = None # Treat as unknown
+            turn = None
 
-    # Extract data with defaults
+    # Extract data - only need base and target now
     base_info = analysis_results.get("base", {})
     target_info = analysis_results.get("target", {})
-    sf1_info = analysis_results.get("stockfish1", {})
 
     def clean_san(san_string):
         if san_string is None: return "N/A"
@@ -64,58 +62,46 @@ def display_stockfish_comparison(analysis_results, fen): # Added fen argument
     target_eval_type = target_info.get("eval_type")
     target_eval_str = format_eval_for_display(target_eval_num, target_eval_type)
 
-    sf1_san = clean_san(sf1_info.get("san", "N/A"))
-    sf1_eval_num = sf1_info.get("eval")
-    sf1_eval_type = sf1_info.get("eval_type")
-    sf1_eval_str = format_eval_for_display(sf1_eval_num, sf1_eval_type)
+    # --- Create 2 Columns using Markdown ---
+    col1, col2 = st.columns(2) # Use only 2 columns
 
-    # --- Create Columns using Markdown ---
-    col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("**Base**")
         st.markdown(f"<span style='color:red; font-size: 1.2em;'>**{base_san}**</span>", unsafe_allow_html=True)
         st.markdown(f"{base_eval_str}")
+
     with col2:
         st.markdown("**Target**")
         st.markdown(f"<span style='color:blue; font-size: 1.2em;'>**{target_san}**</span>", unsafe_allow_html=True)
         st.markdown(f"{target_eval_str}")
-    with col3:
-        st.markdown("**Stockfish #1**")
-        st.markdown(f"<span style='font-size: 1.2em;'>**{sf1_san}**</span>", unsafe_allow_html=True)
-        st.markdown(f"{sf1_eval_str}")
+
+    # Removed the 3rd column for Stockfish #1
 
     st.divider()
 
     # --- Calculate and Display Delta based on Turn ---
     delta_value_part = "N/A"
-    label_prefix = "" # Will be set based on turn
+    label_prefix = ""
 
-    # Calculate delta only if both evaluations are valid centipawn numbers
     if (base_eval_type == "cp" and isinstance(base_eval_num, (int, float)) and
         target_eval_type == "cp" and isinstance(target_eval_num, (int, float)) and
         not math.isnan(base_eval_num) and not math.isinf(base_eval_num) and
         not math.isnan(target_eval_num) and not math.isinf(target_eval_num)):
         try:
-            # Raw difference from White's perspective
             raw_delta = (target_eval_num / 100.0) - (base_eval_num / 100.0)
             display_delta = 0.0
-            label_prefix = "Unknown Turn = " # Default
+            label_prefix = "Unknown Turn = "
 
             if turn == chess.WHITE:
-                display_delta = raw_delta # Positive means Blue is better for White
+                display_delta = raw_delta
                 label_prefix = f"<span style='color:blue'>Blue</span> - <span style='color:red'>Red</span> = "
             elif turn == chess.BLACK:
-                # We want to show improvement for Black.
-                # Calculate Red - Blue. Positive means Red is better for Black.
-                display_delta = -raw_delta # Flip the sign
+                display_delta = -raw_delta
                 label_prefix = f"<span style='color:red'>Red</span> - <span style='color:blue'>Blue</span> = "
             else: # FEN invalid or missing
-                display_delta = raw_delta # Fallback to White's perspective
+                display_delta = raw_delta
                 label_prefix = "Blue - Red (Turn Unknown) = "
 
-            # Determine color based on the sign of display_delta
-            # Positive display_delta means the second term in the label is better for the current player
-            # Or more simply: blue if positive, red if negative
             delta_color = "blue" if display_delta >= 0 else "red"
             formatted_delta = f"{display_delta:+.2f}"
             delta_value_part = f"<span style='color:{delta_color}'>**{formatted_delta} pawns**</span>"
@@ -127,10 +113,7 @@ def display_stockfish_comparison(analysis_results, fen): # Added fen argument
     else:
         delta_value_part = "*(N/A)*"
 
-    # Construct the final markdown string
     final_markdown_string = label_prefix + delta_value_part
-
-    # Display the final string using markdown
     st.markdown(final_markdown_string, unsafe_allow_html=True)
 
 
@@ -157,7 +140,7 @@ def layout_main_content(fen, svg_board, base_rating, target_rating, base_display
              # Pass FEN to the display function
              display_stockfish_comparison(analysis_results=stockfish_results, fen=fen)
 
-
+    # --- Right Columns (Mid and Right) remain unchanged ---
     with mid_col:
         st.markdown(f"### Base Cohort ({base_rating})")
         if base_display_df is not None and not base_display_df.empty:
