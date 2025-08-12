@@ -21,8 +21,8 @@ TEMPERATURE = 1.0
 # Minimum number of games to consider a move
 MIN_GAMES = 2
 
-# Minimum win rate difference to consider a divergence
-MIN_WIN_RATE_DELTA = 0.07
+# Minimum win rate difference to consider a divergence (in percentage points)
+MIN_WIN_RATE_DELTA = 5.0
 
 # API settings
 API_BASE = "https://explorer.lichess.ovh/lichess"

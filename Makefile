@@ -16,7 +16,7 @@ clean:
 	find . -type f -name ".DS_Store" -delete
 
 install:
-	python3.10 -m venv env
+	python3 -m venv env
 	. env/bin/activate && pip install -r requirements.txt
 
 run:
