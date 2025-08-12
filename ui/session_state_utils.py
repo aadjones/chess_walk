@@ -50,8 +50,7 @@ def update_position_index(selected_position_display_index):
     if current_index != selected_position_display_index:
         st.session_state["position_index"] = selected_position_display_index
         reset_stockfish_display_on_change() # Reset SF display on direct selection change too
-        # Force rerun to update UI immediately
-        st.rerun()
+        # Remove st.rerun() - it's causing dropdown selection issues
 
 def toggle_stockfish_display():
     """Toggle the Stockfish analysis display flag."""

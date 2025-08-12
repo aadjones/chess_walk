@@ -102,35 +102,27 @@ def create_position_controls(position_ids, total_positions=None, all_position_id
     # Ensure position_index is valid before using it for the selectbox default
     clamp_position_index(position_ids) # Ensures index is within [0, num_positions-1]
 
-    # Use string labels to avoid index confusion
-    if all_position_ids is not None:
-        dropdown_options = [f"Position {pid}" for pid in all_position_ids]
-        dropdown_label = f"Jump to any position (1-{total_positions})"
-        id_mapping = all_position_ids
-    else:
-        dropdown_options = [f"Position {pid}" for pid in position_ids]
-        dropdown_label = "Select Position:"
-        id_mapping = position_ids
-    
-    # Get current position ID for default
+    # Super simple approach: just use number input
     current_pos_index = st.session_state.get("position_index", 0)
-    current_pos_id = position_ids[current_pos_index] if position_ids and current_pos_index < len(position_ids) else None
+    current_pos_id = position_ids[current_pos_index] if position_ids and current_pos_index < len(position_ids) else 1
     
-    # Find index for default selection
-    default_idx = 0
-    if current_pos_id and current_pos_id in id_mapping:
-        default_idx = id_mapping.index(current_pos_id)
+    if all_position_ids is not None:
+        min_pos = min(all_position_ids)
+        max_pos = max(all_position_ids)
+        label = f"Jump to position ({min_pos}-{max_pos}):"
+    else:
+        min_pos = min(position_ids) if position_ids else 1
+        max_pos = max(position_ids) if position_ids else 1
+        label = "Select position:"
     
-    selected_option = st.sidebar.selectbox(
-        dropdown_label,
-        options=dropdown_options,
-        index=default_idx,
-        key="position_selector",
-        label_visibility="visible"
+    selected_position_id = st.sidebar.number_input(
+        label,
+        min_value=min_pos,
+        max_value=max_pos,
+        value=current_pos_id,
+        step=1,
+        key="position_number_input"
     )
-    
-    # Extract position ID from selected option
-    selected_position_id = id_mapping[dropdown_options.index(selected_option)]
 
     # Simple logic: if position is in current cohort, update local index
     if selected_position_id in position_ids:
