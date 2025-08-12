@@ -8,8 +8,8 @@ import pytest
 
 from src.walker import (
     choose_weighted_move,
-    create_puzzle_data,
-    generate_and_save_puzzles,
+    create_position_data,
+    generate_and_save_positions,
 )
 
 # Add the project root to path
@@ -43,7 +43,7 @@ def fake_get_move_stats(fen: str, rating: str) -> tuple[list[dict], int]:
         )
 
 
-def test_create_puzzle_data_includes_cohort_pair():
+def test_create_position_data_includes_cohort_pair():
     base_rating = "1200"
     target_rating = "1600"
     fake_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -59,8 +59,8 @@ def test_create_puzzle_data_includes_cohort_pair():
         "target_df": target_df,
     }
 
-    # Call create_puzzle_data with a given ply (for example, 5)
-    puzzle_data = create_puzzle_data(fake_divergence, base_rating, target_rating, ply=5)
+    # Call create_position_data with a given ply (for example, 5)
+    puzzle_data = create_position_data(fake_divergence, base_rating, target_rating, ply=5)
 
     # The expected CohortPair is the combination of base and target ratings.
     expected_cohort_pair = f"{base_rating}-{target_rating}"
@@ -85,13 +85,13 @@ def custom_choices_factory(moves: list[str]) -> Callable[[list[str], list[float]
     return custom_choices
 
 
-@patch("src.walker.save_puzzle_to_csv", return_value=None)
+@patch("src.walker.save_position_to_csv", return_value=None)
 @patch("src.walker.find_divergence")
 @patch("src.walker.random.choices")
 @patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)
-def test_generate_and_save_puzzles_success(mock_get_stats, mock_choices, mock_find_divergence, mock_save):
+def test_generate_and_save_positions_success(mock_get_stats, mock_choices, mock_find_divergence, mock_save):
     """
-    Qualitatively test that generate_and_save_puzzles finds at least one puzzle when
+    Qualitatively test that generate_and_save_positions finds at least one position when
     significant divergence is detected.
     """
     move_sequence = ["e2e4", "e7e5", "g1f3"]
@@ -110,35 +110,35 @@ def test_generate_and_save_puzzles_success(mock_get_stats, mock_choices, mock_fi
     }
     mock_find_divergence.return_value = divergence_dict
 
-    puzzles = generate_and_save_puzzles("1600", "2000", min_ply=1, max_ply=3)
+    puzzles = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
 
-    assert puzzles, "Expected at least one puzzle to be generated."
+    assert puzzles, "Expected at least one position to be generated."
     for puzzle in puzzles:
         assert puzzle.get("base_rating") == "1600"
         assert puzzle.get("target_rating") == "2000"
-        # Check that the puzzle's ply is at least 1
+        # Check that the position's ply is at least 1
         assert puzzle.get("ply") >= 1
 
 
 @patch("src.walker.get_move_stats", side_effect=lambda fen, rating: ([], 0))
-@patch("src.walker.save_puzzle_to_csv", return_value=None)
-def test_generate_and_save_puzzles_insufficient_data(mock_get_stats, mock_save):
+@patch("src.walker.save_position_to_csv", return_value=None)
+def test_generate_and_save_positions_insufficient_data(mock_get_stats, mock_save):
     """
-    Test that generate_and_save_puzzles returns an empty list when there is insufficient move data.
+    Test that generate_and_save_positions returns an empty list when there is insufficient move data.
     """
-    puzzles = generate_and_save_puzzles("1600", "2000", min_ply=1, max_ply=3)
+    puzzles = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
     assert puzzles == []
 
 
-@patch("src.walker.save_puzzle_to_csv", return_value=None)
+@patch("src.walker.save_position_to_csv", return_value=None)
 @patch("src.walker.find_divergence")
 @patch("src.walker.random.choices")
 @patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)
-def test_generate_and_save_puzzles_no_significant_divergence(
+def test_generate_and_save_positions_no_significant_divergence(
     mock_get_stats, mock_choices, mock_find_divergence, mock_save
 ):
     """
-    Test that generate_and_save_puzzles returns an empty list when divergence is not detected.
+    Test that generate_and_save_positions returns an empty list when divergence is not detected.
     """
     move_sequence = ["e2e4", "e7e5", "g1f3"]
     mock_choices.side_effect = custom_choices_factory(move_sequence)
@@ -146,7 +146,7 @@ def test_generate_and_save_puzzles_no_significant_divergence(
     # Simulate no significant divergence by having find_divergence return None.
     mock_find_divergence.return_value = None
 
-    puzzles = generate_and_save_puzzles("1600", "2000", min_ply=1, max_ply=3)
+    puzzles = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
     assert puzzles == []
 
 

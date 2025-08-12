@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.walker import save_puzzle_to_csv
+from src.walker import save_position_to_csv
 
 
 def create_sample_df(
@@ -23,8 +23,8 @@ def create_sample_df(
         "Freq": [0.6],
     }
     df = pd.DataFrame(data)
-    # Create multi-index for Cohort, Row, PuzzleIdx
-    df.index = pd.MultiIndex.from_tuples([(cohort, row, puzzle_idx)], names=["Cohort", "Row", "PuzzleIdx"])
+    # Create multi-index for Cohort, Row, PositionIdx
+    df.index = pd.MultiIndex.from_tuples([(cohort, row, puzzle_idx)], names=["Cohort", "Row", "PositionIdx"])
     return df
 
 
@@ -36,10 +36,10 @@ def test_save_puzzle_to_csv_new(tmp_path):
     df_new = create_sample_df(
         puzzle_idx=0, fen="fen1", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
     )
-    save_puzzle_to_csv(df_new, output_path=str(output_csv))
+    save_position_to_csv(df_new, output_path=str(output_csv))
     df_loaded = pd.read_csv(str(output_csv), index_col=[0, 1, 2])
-    unique_indices = df_loaded.index.get_level_values("PuzzleIdx").unique()
-    assert len(unique_indices) == 1, f"Expected 1 unique PuzzleIdx, got {len(unique_indices)}"
+    unique_indices = df_loaded.index.get_level_values("PositionIdx").unique()
+    assert len(unique_indices) == 1, f"Expected 1 unique PositionIdx, got {len(unique_indices)}"
 
 
 def test_save_puzzle_to_csv_skip_duplicate(tmp_path):
@@ -57,12 +57,12 @@ def test_save_puzzle_to_csv_skip_duplicate(tmp_path):
     df_duplicate = create_sample_df(
         puzzle_idx=99, fen="fen_duplicate", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
     )
-    save_puzzle_to_csv(df_duplicate, output_path=str(output_csv))
+    save_position_to_csv(df_duplicate, output_path=str(output_csv))
 
     df_loaded = pd.read_csv(str(output_csv), index_col=[0, 1, 2])
-    unique_indices = df_loaded.index.get_level_values("PuzzleIdx").unique()
-    # The duplicate should be skipped, so unique PuzzleIdx remains 1.
-    assert len(unique_indices) == 1, f"Expected 1 unique PuzzleIdx, got {len(unique_indices)}"
+    unique_indices = df_loaded.index.get_level_values("PositionIdx").unique()
+    # The duplicate should be skipped, so unique PositionIdx remains 1.
+    assert len(unique_indices) == 1, f"Expected 1 unique PositionIdx, got {len(unique_indices)}"
 
 
 def test_save_puzzle_to_csv_append_non_duplicate(tmp_path):
@@ -80,9 +80,9 @@ def test_save_puzzle_to_csv_append_non_duplicate(tmp_path):
     df_new = create_sample_df(
         puzzle_idx=99, fen="fen2", cohort="base", row=0, rating="1200", ply=5, cohort_pair="1200-1600"
     )
-    save_puzzle_to_csv(df_new, output_path=str(output_csv))
+    save_position_to_csv(df_new, output_path=str(output_csv))
 
     df_loaded = pd.read_csv(str(output_csv), index_col=[0, 1, 2])
-    unique_indices = df_loaded.index.get_level_values("PuzzleIdx").unique()
-    # We expect 2 unique PuzzleIdx values.
-    assert len(unique_indices) == 2, f"Expected 2 unique PuzzleIdx, got {len(unique_indices)}"
+    unique_indices = df_loaded.index.get_level_values("PositionIdx").unique()
+    # We expect 2 unique PositionIdx values.
+    assert len(unique_indices) == 2, f"Expected 2 unique PositionIdx, got {len(unique_indices)}"

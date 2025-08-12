@@ -44,7 +44,7 @@ def check_frequency_divergence(
     Returns: tuple[bool, float]: A tuple containing a boolean indicating if there is a significant difference in move frequencies and the p-value of the chi-square test.
     """
     all_moves = set(base_df["Move"]).union(set(target_df["Move"]))
-    contingency = pd.DataFrame(index=list(all_moves), columns=["Base", "Target"]).fillna(0)
+    contingency = pd.DataFrame(index=list(all_moves), columns=["Base", "Target"], dtype=float).fillna(0)
     for move in all_moves:
         base_games = base_df[base_df["Move"] == move]["Games"].sum() if move in base_df["Move"].values else 0
         target_games = target_df[target_df["Move"] == move]["Games"].sum() if move in target_df["Move"].values else 0

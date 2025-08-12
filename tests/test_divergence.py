@@ -14,7 +14,7 @@ MIN_GAMES = 50
 
 BASE_MOVES = [
     {"uci": "f1b5", "games_total": 18337, "win_rate": 0.4341, "draw_rate": 0.0613, "loss_rate": 0.5046, "freq": 0.4528},
-    {"uci": "f1e2", "games_total": 12013, "win_rate": 0.4724, "draw_rate": 0.0798, "loss_rate": 0.4478, "freq": 0.2966},
+    {"uci": "f1e2", "games_total": 12013, "win_rate": 0.4900, "draw_rate": 0.0798, "loss_rate": 0.4302, "freq": 0.2966},
 ]
 TARGET_MOVES = [
     {"uci": "f1e2", "games_total": 309, "win_rate": 0.6000, "draw_rate": 0.1000, "loss_rate": 0.3000, "freq": 0.4003},
