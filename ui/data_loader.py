@@ -6,16 +6,28 @@ import streamlit as st
 # Import the single settings instance
 from config import settings
 
-@st.cache_data # Cache the data loading
+@st.cache_data(ttl=60) # Cache with 60 second TTL to force refresh  
 def load_position_data():
     """Load the entire positions CSV as a DataFrame (unfiltered)."""
     csv_path = settings.positions_csv_path
+    
+    # Add file modification time to force cache refresh when file changes
+    import os
+    file_mtime = os.path.getmtime(csv_path) if os.path.exists(csv_path) else 0
+    st.write(f"Debug: Loading positions.csv (mtime: {file_mtime})")  # Temporary debug info
     try:
         # Don't set index_col here; keep all columns.
         positions_df = pd.read_csv(csv_path)
         # Basic validation
         if positions_df.empty:
             st.warning(f"Warning: Position file loaded but is empty: '{csv_path}'")
+        
+        # Debug info about loaded data
+        unique_positions = len(positions_df[settings.col_position_idx].unique())
+        min_pos = positions_df[settings.col_position_idx].min()
+        max_pos = positions_df[settings.col_position_idx].max()
+        st.write(f"Debug: Loaded {unique_positions} positions (range: {min_pos}-{max_pos})")
+        
         required_cols = [settings.col_cohort_pair, settings.col_position_idx, settings.col_fen]
         missing_cols = [col for col in required_cols if col not in positions_df.columns]
         if missing_cols:
