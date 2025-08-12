@@ -106,6 +106,16 @@ def main():
         create_position_controls([], total_positions, all_position_ids)
         st.stop()
 
+    # Handle requested position after cohort switch
+    if "requested_position_id" in st.session_state:
+        requested_id = st.session_state["requested_position_id"]
+        if requested_id in position_ids:
+            # Set the position index to the requested position
+            local_index = position_ids.index(requested_id)
+            st.session_state["position_index"] = local_index
+        # Clear the request
+        del st.session_state["requested_position_id"]
+
     current_position_id = create_position_controls(position_ids, total_positions, all_position_ids)
     if current_position_id is None:
         st.info("Select a position from the sidebar.")
@@ -117,6 +127,8 @@ def main():
         position_cohort = positions_df[positions_df[settings.col_position_idx] == current_position_id][settings.col_cohort_pair].iloc[0]
         # Update session state to switch cohorts
         st.session_state["selected_cohort_pair"] = position_cohort
+        # Store the requested position so we don't lose it
+        st.session_state["requested_position_id"] = current_position_id
         st.rerun()
 
     # --- Position Processing ---

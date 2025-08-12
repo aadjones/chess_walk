@@ -124,10 +124,5 @@ def create_position_controls(position_ids, total_positions=None, all_position_id
         key="position_number_input"
     )
 
-    # Simple logic: if position is in current cohort, update local index
-    if selected_position_id in position_ids:
-        local_index = position_ids.index(selected_position_id)
-        update_position_index(local_index)
-    
-    # Always return the selected position ID
+    # Just return the selected position ID - let the main app handle everything
     return selected_position_id

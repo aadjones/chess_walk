@@ -37,7 +37,9 @@ def update_cohort_pair(new_cohort_pair):
     old_cohort_pair = st.session_state.get("selected_cohort_pair")
     if new_cohort_pair != old_cohort_pair:
         st.session_state["selected_cohort_pair"] = new_cohort_pair
-        st.session_state["position_index"] = 0 # Reset position index
+        # Check if we have a requested position, otherwise reset to 0
+        if "requested_position_id" not in st.session_state:
+            st.session_state["position_index"] = 0 # Reset position index
         reset_stockfish_display_on_change() # Reset SF display
         # Force rerun to update filtered data immediately
         st.rerun()
