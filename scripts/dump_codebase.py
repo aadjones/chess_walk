@@ -15,14 +15,32 @@ import io  # Using io.open for explicit encoding control is good practice
 # --- Default Configuration ---
 # Common directories to skip by default
 DEFAULT_SKIP_DIRS = [
-    '.git', '__pycache__', 'venv', '.venv', 'env', '.env',
-    'build', 'dist', 'node_modules', '.svn', '.hg',
-    '.pytest_cache', '.mypy_cache', '.tox',
-    'site-packages', 'lib', 'include', 'bin', 'logs', 'deprecated',
-    'output', 'reports',  # Common venv dirs
+    ".git",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "env",
+    ".env",
+    "build",
+    "dist",
+    "node_modules",
+    ".svn",
+    ".hg",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".tox",
+    "site-packages",
+    "lib",
+    "include",
+    "bin",
+    "logs",
+    "deprecated",
+    "output",
+    "reports",  # Common venv dirs
 ]
 
 # --- Core Processing Functions ---
+
 
 def process_python_file(file_path, filename):
     """
@@ -44,7 +62,7 @@ def process_python_file(file_path, filename):
 
     try:
         # Use io.open for explicit encoding and error handling
-        with io.open(file_path, 'r', encoding='utf-8', errors='replace') as infile:
+        with io.open(file_path, "r", encoding="utf-8", errors="replace") as infile:
             file_content = infile.read()
 
         # Check if the exact header is present
@@ -61,7 +79,7 @@ def process_python_file(file_path, filename):
     except IOError as e:
         print(f"Warning: Could not read file {file_path}: {e}", file=sys.stderr)
         return None
-    except Exception as e: # Catch potential unexpected errors
+    except Exception as e:  # Catch potential unexpected errors
         print(f"Warning: Error processing file {file_path}: {e}", file=sys.stderr)
         return None
 
@@ -84,7 +102,7 @@ def process_codebase(root_dir, output_file_path, skip_set):
 
     try:
         # Open the output file for writing
-        with io.open(output_file_path, 'w', encoding='utf-8') as outfile:
+        with io.open(output_file_path, "w", encoding="utf-8") as outfile:
             print("Starting directory traversal...")
 
             for dirpath, dirnames, filenames in os.walk(root_dir, topdown=True):
@@ -96,18 +114,17 @@ def process_codebase(root_dir, output_file_path, skip_set):
                     skipped_dirs = original_dirnames_count - len(dirnames)
                     # print(f"  Skipping {skipped_dirs} subdirectories in {os.path.relpath(dirpath, root_dir)}")
 
-
                 # --- File Processing ---
                 relative_dir = os.path.relpath(dirpath, root_dir)
                 # Handle root case where relative_dir is '.'
-                if relative_dir == '.':
-                    relative_dir = ''
+                if relative_dir == ".":
+                    relative_dir = ""
 
                 # Sort filenames for deterministic output order (optional but nice)
                 filenames.sort()
 
                 for filename in filenames:
-                    if filename.endswith('.py'):
+                    if filename.endswith(".py"):
                         full_path = os.path.join(dirpath, filename)
                         relative_file_path = os.path.join(relative_dir, filename) if relative_dir else filename
 
@@ -136,27 +153,23 @@ def process_codebase(root_dir, output_file_path, skip_set):
 
 # --- Argument Parsing and Main Execution ---
 
+
 def parse_arguments():
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Concatenate all Python files in a directory tree into a single file, adding filename headers.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter # Shows defaults in help
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,  # Shows defaults in help
     )
-    parser.add_argument(
-        "root_dir",
-        help="Path to the root directory of the Python codebase."
-    )
-    parser.add_argument(
-        "output_file",
-        help="Path to the output file where the concatenated code will be saved."
-    )
+    parser.add_argument("root_dir", help="Path to the root directory of the Python codebase.")
+    parser.add_argument("output_file", help="Path to the output file where the concatenated code will be saved.")
     parser.add_argument(
         "--skip",
-        nargs='+',
+        nargs="+",
         default=DEFAULT_SKIP_DIRS,
-        help="List of directory names to skip (e.g., venv __pycache__ .git)."
+        help="List of directory names to skip (e.g., venv __pycache__ .git).",
     )
     return parser.parse_args()
+
 
 def main():
     """Main execution function."""
@@ -173,13 +186,12 @@ def main():
     # Validate output file's directory exists (optional but good practice)
     output_dir = os.path.dirname(args.output_file)
     if output_dir and not os.path.isdir(output_dir):
-         try:
-             os.makedirs(output_dir)
-             print(f"Created output directory: {output_dir}")
-         except OSError as e:
-             print(f"Error: Could not create output directory {output_dir}: {e}", file=sys.stderr)
-             sys.exit(1)
-
+        try:
+            os.makedirs(output_dir)
+            print(f"Created output directory: {output_dir}")
+        except OSError as e:
+            print(f"Error: Could not create output directory {output_dir}: {e}", file=sys.stderr)
+            sys.exit(1)
 
     print("-" * 60)
     print("Starting Python Codebase Dump")

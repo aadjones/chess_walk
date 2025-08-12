@@ -31,11 +31,11 @@ Edit the parameters in `parameters.py` to taste.
 
 Then, from the project root, run
 
-```python
-python scripts/generate_puzzles.py --num_walks 3
+```bash
+python scripts/generate_positions.py --num_walks 3
 ```
 
-This will take 3 walks to scrape puzzles. It then builds the file output/puzzles.csv.
+This will take 3 walks to scrape positions. It then builds the file output/positions.csv.
 
 Next, to visualize the results, from the project root, run
 
@@ -43,7 +43,7 @@ Next, to visualize the results, from the project root, run
 streamlit run ui/streamlit_app.py
 ```
 
-This will build a data visualization based on the data scraped from your `generate_puzzles.py` script.
+This will build a data visualization based on the data scraped from your `generate_positions.py` script.
 
 ## Development
 

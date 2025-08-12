@@ -26,14 +26,14 @@ from session_state_utils import initialize_session_state
 
 # UI Components
 from sidebar import create_cohort_pair_selector, create_position_controls
-from display import layout_main_content # Imports the layout function
+from display import layout_main_content  # Imports the layout function
 
 # Core Logic
 from puzzle_logic import (
     get_position_data,
     prepare_board_data,
     convert_moves_to_san,
-    get_stockfish_analysis # Imports the analysis function
+    get_stockfish_analysis,  # Imports the analysis function
 )
 
 # Data Formatting
@@ -46,13 +46,15 @@ from data_formatting import (
 
 # --- Main Application Logic ---
 
+
 def main():
     """Main function to orchestrate the app workflow."""
     st.title("ChessWalk")  # v2.0
 
     # --- Explainer Section ---
     with st.expander("ℹ️ What is this tool?"):
-        st.markdown("""
+        st.markdown(
+            """
         **Discover how chess players of different strengths think differently about the same positions.**
         
         This tool analyzes real chess positions where players of different rating levels make 
@@ -68,7 +70,10 @@ def main():
         various strategic and tactical themes.
         
         📖 **Learn more:** [Read the full explanation]({}) about this analysis method.
-        """.format("https://lichess.org/@/HarpSeal/blog/steal-better-moves/HAqUauJU"))
+        """.format(
+                "https://lichess.org/@/HarpSeal/blog/steal-better-moves/HAqUauJU"
+            )
+        )
 
     # --- Initialization ---
     initialize_session_state()
@@ -86,14 +91,15 @@ def main():
     # --- Sidebar / User Input ---
     selected_cohort_pair = create_cohort_pair_selector(unique_pairs)
     if selected_cohort_pair is None:
-         st.stop()
+        st.stop()
 
     # --- Data Filtering & Grouping ---
     # Get total positions across all cohorts for global context
     from config import settings
+
     all_position_ids = sorted(positions_df[settings.col_position_idx].unique().tolist())
     total_positions = len(all_position_ids)
-    
+
     filtered_df = filter_data_by_cohort_pair(positions_df, selected_cohort_pair)
     if filtered_df.empty:
         st.warning(f"No position data found for Cohort Pair: {selected_cohort_pair}")
@@ -124,7 +130,9 @@ def main():
     # If user selected a position from different cohort, switch to that cohort
     if current_position_id not in position_ids:
         # Find which cohort this position belongs to
-        position_cohort = positions_df[positions_df[settings.col_position_idx] == current_position_id][settings.col_cohort_pair].iloc[0]
+        position_cohort = positions_df[positions_df[settings.col_position_idx] == current_position_id][
+            settings.col_cohort_pair
+        ].iloc[0]
         # Update session state to switch cohorts
         st.session_state["selected_cohort_pair"] = position_cohort
         # Store the requested position so we don't lose it
@@ -156,9 +164,9 @@ def main():
     target_display_df = prepare_display_dataframe(target_data_wdl)
 
     # --- Stockfish Analysis (Run only if requested) ---
-    stockfish_results = None # Initialize
+    stockfish_results = None  # Initialize
     if st.session_state.get("show_stockfish", False):
-         stockfish_results = get_stockfish_analysis(fen, base_uci, target_uci)
+        stockfish_results = get_stockfish_analysis(fen, base_uci, target_uci)
 
     # --- Display Layout ---
     layout_main_content(
@@ -168,7 +176,7 @@ def main():
         target_rating=target_rating,
         base_display_df=base_display_df,
         target_display_df=target_display_df,
-        stockfish_results=stockfish_results # Pass the analysis results dict
+        stockfish_results=stockfish_results,  # Pass the analysis results dict
     )
 
 

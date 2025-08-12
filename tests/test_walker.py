@@ -60,16 +60,16 @@ def test_create_position_data_includes_cohort_pair():
     }
 
     # Call create_position_data with a given ply (for example, 5)
-    puzzle_data = create_position_data(fake_divergence, base_rating, target_rating, ply=5)
+    position_data = create_position_data(fake_divergence, base_rating, target_rating, ply=5)
 
     # The expected CohortPair is the combination of base and target ratings.
     expected_cohort_pair = f"{base_rating}-{target_rating}"
 
-    # Check that the returned puzzle data includes a CohortPair key with the correct value.
-    assert "CohortPair" in puzzle_data, "Puzzle data should include a 'CohortPair' key."
+    # Check that the returned position data includes a CohortPair key with the correct value.
+    assert "CohortPair" in position_data, "Position data should include a 'CohortPair' key."
     assert (
-        puzzle_data["CohortPair"] == expected_cohort_pair
-    ), f"Expected CohortPair '{expected_cohort_pair}', got '{puzzle_data['CohortPair']}'"
+        position_data["CohortPair"] == expected_cohort_pair
+    ), f"Expected CohortPair '{expected_cohort_pair}', got '{position_data['CohortPair']}'"
 
 
 def custom_choices_factory(moves: list[str]) -> Callable[[list[str], list[float], int], list[str]]:
@@ -110,14 +110,14 @@ def test_generate_and_save_positions_success(mock_get_stats, mock_choices, mock_
     }
     mock_find_divergence.return_value = divergence_dict
 
-    puzzles = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
+    positions = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
 
-    assert puzzles, "Expected at least one position to be generated."
-    for puzzle in puzzles:
-        assert puzzle.get("base_rating") == "1600"
-        assert puzzle.get("target_rating") == "2000"
+    assert positions, "Expected at least one position to be generated."
+    for position in positions:
+        assert position.get("base_rating") == "1600"
+        assert position.get("target_rating") == "2000"
         # Check that the position's ply is at least 1
-        assert puzzle.get("ply") >= 1
+        assert position.get("ply") >= 1
 
 
 @patch("src.walker.get_move_stats", side_effect=lambda fen, rating: ([], 0))
@@ -126,8 +126,8 @@ def test_generate_and_save_positions_insufficient_data(mock_get_stats, mock_save
     """
     Test that generate_and_save_positions returns an empty list when there is insufficient move data.
     """
-    puzzles = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
-    assert puzzles == []
+    positions = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
+    assert positions == []
 
 
 @patch("src.walker.save_position_to_csv", return_value=None)
@@ -146,8 +146,8 @@ def test_generate_and_save_positions_no_significant_divergence(
     # Simulate no significant divergence by having find_divergence return None.
     mock_find_divergence.return_value = None
 
-    puzzles = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
-    assert puzzles == []
+    positions = generate_and_save_positions("1600", "2000", min_ply=1, max_ply=3)
+    assert positions == []
 
 
 @patch("src.walker.get_move_stats", side_effect=fake_get_move_stats)

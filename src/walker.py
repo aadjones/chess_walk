@@ -224,7 +224,7 @@ def save_position_to_csv(position_df: pd.DataFrame, output_path: str = "output/p
             else:
                 position_df = existing_df
         except Exception as e:
-            logger.warning(f"Error loading existing puzzles.csv: {e}. Overwriting.")
+            logger.warning(f"Error loading existing positions.csv: {e}. Overwriting.")
             position_df = position_df.copy()
             position_df["PositionIdx"] = 0
             position_df = position_df.set_index("PositionIdx", append=True)
@@ -237,7 +237,7 @@ def save_position_to_csv(position_df: pd.DataFrame, output_path: str = "output/p
         position_df.index = position_df.index.set_names(["Cohort", "Row", "PositionIdx"])
     position_df.to_csv(output_path)
     logger.debug(
-        f"After saving, puzzles.csv has {len(position_df.index.get_level_values('PositionIdx').unique())} unique PositionIdx values."
+        f"After saving, positions.csv has {len(position_df.index.get_level_values('PositionIdx').unique())} unique PositionIdx values."
     )
 
 

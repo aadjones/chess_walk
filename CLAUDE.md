@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Chess Walk is a Python application that analyzes chess positions by comparing move preferences between different rating bands of Lichess players. It generates "puzzles" by identifying positions where stronger players prefer different moves than weaker players, then provides a Streamlit UI for exploration.
+Chess Walk is a Python application that analyzes chess positions by comparing move preferences between different rating bands of Lichess players. It identifies positions where stronger players prefer different moves than weaker players, then provides a Streamlit UI for exploration.
 
 ### Core Principles
 
@@ -45,8 +45,8 @@ flake8 .                  # Lint code
 
 ### Main Application Workflows
 ```bash
-# Generate puzzles from chess position analysis
-python scripts/generate_puzzles.py --num_walks 3
+# Generate positions from chess position analysis
+python scripts/generate_positions.py --num_walks 3
 
 # Launch Streamlit UI for data visualization
 streamlit run ui/streamlit_app.py
@@ -63,7 +63,7 @@ make clean               # Clean build artifacts
 1. **Walker** (`src/walker.py`) - Performs random walks through chess positions using Lichess API data
 2. **API Layer** (`src/api.py`) - Interfaces with Lichess Explorer API for move statistics
 3. **Divergence Detection** (`src/divergence.py`) - Statistical analysis to find significant differences between rating bands
-4. **Data Storage** - Puzzles saved to `output/puzzles.csv` with three-level index (Cohort, Row, PuzzleIdx)
+4. **Data Storage** - Positions saved to `output/positions.csv` with three-level index (Cohort, Row, PositionIdx)
 
 ### Key Components
 - **Parameters** (`parameters.py`) - Central configuration for rating bands, API settings, and analysis thresholds
@@ -96,7 +96,7 @@ Write **focused unit tests for chess analysis logic only**. Follow these princip
 - **Statistical calculations**: Chi-square tests, z-tests, divergence detection accuracy
 - **Chess position handling**: FEN parsing, move validation, board state transitions
 - **Data transformations**: API response processing, CSV generation, rating band mapping
-- **Business logic**: Minimum games thresholds, win rate calculations, puzzle filtering
+- **Business logic**: Minimum games thresholds, win rate calculations, position filtering
 - **Edge cases**: Invalid FENs, insufficient game data, API failures
 
 ### What NOT to Test

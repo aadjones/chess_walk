@@ -6,7 +6,7 @@ from src.csv_utils import sort_csv
 def test_sort_csv(tmp_path):
     # Create sample unsorted CSV data as a multi-line string.
     csv_content = (
-        "Cohort,Row,PuzzleIdx,Move,Games,White %,Draw %,Black %,Freq,FEN,Rating,Ply,CohortPair\n"
+        "Cohort,Row,PositionIdx,Move,Games,White %,Draw %,Black %,Freq,FEN,Rating,Ply,CohortPair\n"
         "base,0,0,f3g5,100,45,5,50,0.2,some_fen,1200,6,1400-1800\n"
         "base,1,0,f3g5,100,45,5,50,0.2,some_fen,1200,6,1200-1600\n"
         "base,2,0,f3g5,100,45,5,50,0.2,some_fen,1200,6,2000-2500\n"
@@ -14,11 +14,11 @@ def test_sort_csv(tmp_path):
     )
 
     # Write the unsorted CSV to a temporary file.
-    input_file = tmp_path / "puzzles.csv"
+    input_file = tmp_path / "positions.csv"
     input_file.write_text(csv_content)
 
     # Define the output file path in the temporary directory.
-    output_file = tmp_path / "puzzles_sorted.csv"
+    output_file = tmp_path / "positions_sorted.csv"
 
     # Call your sort_csv function.
     sort_csv(input_path=str(input_file), output_path=str(output_file))
