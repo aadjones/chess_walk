@@ -46,8 +46,8 @@ class AppSettings(BaseSettings):
     stockfish_depth: int = Field(default=15, validation_alias='STOCKFISH_DEPTH')
 
     # --- Constants ---
-    puzzles_csv_path: str = "output/puzzles.csv" # Make sure this relative path is correct
-    col_puzzle_idx: str = "PuzzleIdx"
+    positions_csv_path: str = "output/positions.csv" # Make sure this relative path is correct
+    col_position_idx: str = "PositionIdx"
     col_cohort_pair: str = "CohortPair"
     col_cohort: str = "Cohort"
     col_fen: str = "FEN"

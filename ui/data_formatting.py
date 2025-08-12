@@ -14,7 +14,7 @@ def cleanup_dataframe(df):
 
     # Columns to potentially drop
     cols_to_drop = [
-        settings.col_cohort, settings.col_puzzle_idx,
+        settings.col_cohort, settings.col_position_idx,
         settings.col_cohort_pair, settings.col_rating
     ]
     # Drop only existing columns

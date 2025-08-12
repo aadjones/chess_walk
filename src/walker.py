@@ -98,9 +98,9 @@ def validate_initial_position(fen: str, base_rating: str, target_rating: str) ->
     return True
 
 
-def create_puzzle_data(divergence: dict, base_rating: str, target_rating: str, ply: int) -> dict:
+def create_position_data(divergence: dict, base_rating: str, target_rating: str, ply: int) -> dict:
     """
-    Creates a dictionary containing puzzle data for the given divergence.
+    Creates a dictionary containing position data for the given divergence.
 
     Args:
         divergence (dict): Divergence data containing base_df, target_df, and fen.
@@ -109,7 +109,7 @@ def create_puzzle_data(divergence: dict, base_rating: str, target_rating: str, p
         ply (int): Current ply number.
 
     Returns:
-        dict: Puzzle data dictionary.
+        dict: Position data dictionary.
     """
     cohort_pair = f"{base_rating}-{target_rating}"
     return {
@@ -139,113 +139,113 @@ def create_puzzle_data(divergence: dict, base_rating: str, target_rating: str, p
     }
 
 
-def build_puzzle_dataframe(
-    divergence: dict, fen: str, base_rating: str, target_rating: str, puzzle_idx: int, ply: int
+def build_position_dataframe(
+    divergence: dict, fen: str, base_rating: str, target_rating: str, position_idx: int, ply: int
 ) -> pd.DataFrame:
     """
-    Builds a DataFrame for the puzzle with base and target cohort data.
+    Builds a DataFrame for the position with base and target cohort data.
 
     Args:
         divergence (dict): Divergence data containing base_df and target_df.
         fen (str): The FEN of the position.
         base_rating (str): Rating band for base cohort.
         target_rating (str): Rating band for target cohort.
-        puzzle_idx (int): Index of the puzzle.
+        position_idx (int): Index of the position.
         ply (int): Current ply number.
 
     Returns:
-        pd.DataFrame: Combined DataFrame with base and target cohort data, indexed by Cohort, Row, and PuzzleIdx.
+        pd.DataFrame: Combined DataFrame with base and target cohort data, indexed by Cohort, Row, and PositionIdx.
     """
     cohort_pair = f"{base_rating}-{target_rating}"
 
     base_df = divergence["base_df"].assign(
         FEN=fen,
         Rating=base_rating,
-        PuzzleIdx=puzzle_idx,
+        PositionIdx=position_idx,
         Ply=ply,
         CohortPair=cohort_pair,
     )
     target_df = divergence["target_df"].assign(
         FEN=fen,
         Rating=target_rating,
-        PuzzleIdx=puzzle_idx,
+        PositionIdx=position_idx,
         Ply=ply,
         CohortPair=cohort_pair,
     )
-    puzzle_df = pd.concat([base_df, target_df], keys=["base", "target"])
-    puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
-    puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
-    return puzzle_df
+    position_df = pd.concat([base_df, target_df], keys=["base", "target"])
+    position_df = position_df.set_index("PositionIdx", append=True)
+    position_df.index = position_df.index.set_names(["Cohort", "Row", "PositionIdx"])
+    return position_df
 
 
-def save_puzzle_to_csv(puzzle_df: pd.DataFrame, output_path: str = "output/puzzles.csv"):
+def save_position_to_csv(position_df: pd.DataFrame, output_path: str = "output/positions.csv"):
     """
-    Saves the puzzle DataFrame to a CSV file, appending to existing data if it exists,
+    Saves the position DataFrame to a CSV file, appending to existing data if it exists,
     and skipping rows with duplicate FENs (for the same CohortPair).
 
     Args:
-        puzzle_df (pd.DataFrame): DataFrame containing puzzle data.
+        position_df (pd.DataFrame): DataFrame containing position data.
         output_path (str): Path to the output CSV file.
     """
-    # If the incoming DataFrame already has PuzzleIdx in its index, reset it (dropping it)
-    if "PuzzleIdx" in puzzle_df.index.names:
-        puzzle_df = puzzle_df.reset_index(level="PuzzleIdx", drop=True)
+    # If the incoming DataFrame already has PositionIdx in its index, reset it (dropping it)
+    if "PositionIdx" in position_df.index.names:
+        position_df = position_df.reset_index(level="PositionIdx", drop=True)
 
     if os.path.exists(output_path):
         try:
             existing_df = pd.read_csv(output_path, index_col=[0, 1, 2])
-            max_existing_idx = existing_df.index.get_level_values("PuzzleIdx").max() if not existing_df.empty else -1
-            logger.debug(f"Max existing PuzzleIdx: {max_existing_idx}")
+            max_existing_idx = existing_df.index.get_level_values("PositionIdx").max() if not existing_df.empty else -1
+            logger.debug(f"Max existing PositionIdx: {max_existing_idx}")
             puzzle_idx = max_existing_idx + 1
 
-            # Reset index for new data: since puzzle_df no longer has PuzzleIdx as a column,
+            # Reset index for new data: since position_df no longer has PositionIdx as a column,
             # add it now.
-            puzzle_df["PuzzleIdx"] = puzzle_idx
-            puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
-            puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
+            position_df["PositionIdx"] = puzzle_idx
+            position_df = position_df.set_index("PositionIdx", append=True)
+            position_df.index = position_df.index.set_names(["Cohort", "Row", "PositionIdx"])
 
             # Check for duplicate FENs within the same CohortPair
             if not existing_df.empty and "FEN" in existing_df.columns and "CohortPair" in existing_df.columns:
-                duplicate_mask = puzzle_df.apply(
+                duplicate_mask = position_df.apply(
                     lambda row: (
                         (existing_df["FEN"] == row["FEN"]) & (existing_df["CohortPair"] == row["CohortPair"])
                     ).any(),
                     axis=1,
                 )
                 if duplicate_mask.any():
-                    duplicate_fens = puzzle_df.loc[duplicate_mask, "FEN"].unique()
+                    duplicate_fens = position_df.loc[duplicate_mask, "FEN"].unique()
                     logger.info(
                         f"Skipping {len(duplicate_fens)} rows with duplicate FENs in the same cohort pair: {duplicate_fens}"
                     )
-                    puzzle_df = puzzle_df[~duplicate_mask]
+                    position_df = position_df[~duplicate_mask]
             # Concatenate new rows if any remain
-            if not puzzle_df.empty:
-                puzzle_df = pd.concat([existing_df, puzzle_df])
+            if not position_df.empty:
+                position_df = pd.concat([existing_df, position_df])
             else:
-                puzzle_df = existing_df
+                position_df = existing_df
         except Exception as e:
             logger.warning(f"Error loading existing puzzles.csv: {e}. Overwriting.")
-            puzzle_df = puzzle_df.copy()
-            puzzle_df["PuzzleIdx"] = 0
-            puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
-            puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
+            position_df = position_df.copy()
+            position_df["PositionIdx"] = 0
+            position_df = position_df.set_index("PositionIdx", append=True)
+            position_df.index = position_df.index.set_names(["Cohort", "Row", "PositionIdx"])
     else:
-        # File does not exist: assign initial PuzzleIdx 0.
-        puzzle_df = puzzle_df.copy()
-        puzzle_df["PuzzleIdx"] = 0
-        puzzle_df = puzzle_df.set_index("PuzzleIdx", append=True)
-        puzzle_df.index = puzzle_df.index.set_names(["Cohort", "Row", "PuzzleIdx"])
-    puzzle_df.to_csv(output_path)
+        # File does not exist: assign initial PositionIdx 0.
+        position_df = position_df.copy()
+        position_df["PositionIdx"] = 0
+        position_df = position_df.set_index("PositionIdx", append=True)
+        position_df.index = position_df.index.set_names(["Cohort", "Row", "PositionIdx"])
+    position_df.to_csv(output_path)
     logger.debug(
-        f"After saving, puzzles.csv has {len(puzzle_df.index.get_level_values('PuzzleIdx').unique())} unique PuzzleIdx values."
+        f"After saving, puzzles.csv has {len(position_df.index.get_level_values('PositionIdx').unique())} unique PositionIdx values."
     )
 
 
-def generate_and_save_puzzles(
+def generate_and_save_positions(
     base_rating: str, target_rating: str, min_ply: int = MIN_PLY, max_ply: int = MAX_PLY
 ) -> list[dict]:
     """
-    Generates puzzles by performing a random walk and saving positions with significant divergence.
+    Generates positions by performing a random walk and saving positions with significant divergence.
 
     Args:
         base_rating (str): Rating band for base cohort.
@@ -254,7 +254,7 @@ def generate_and_save_puzzles(
         max_ply (int): Maximum ply for the random walk.
 
     Returns:
-        list: List of puzzle data dictionaries.
+        list: List of position data dictionaries.
     """
     logger.info(
         f"Starting random walk with divergence: base_rating={base_rating}, "
@@ -262,12 +262,12 @@ def generate_and_save_puzzles(
     )
     board = chess.Board(STARTING_FEN)
     fen = board.fen()
-    added_puzzles = []
+    added_positions = []
     logger.debug(f"Initial position: {fen}")
 
     # Validate initial position
     if not validate_initial_position(fen, base_rating, target_rating):
-        return added_puzzles
+        return added_positions
 
     # Perform the random walk
     for ply in range(max_ply):
@@ -301,20 +301,20 @@ def generate_and_save_puzzles(
 
         # Save every divergence detected (no gap threshold!)
         logger.info(f"Significant divergence found at ply {ply+1}")
-        puzzle_data = create_puzzle_data(divergence, base_rating, target_rating, ply + 1)
-        added_puzzles.append(puzzle_data)
+        position_data = create_position_data(divergence, base_rating, target_rating, ply + 1)
+        added_positions.append(position_data)
 
-        # Build and save the puzzle DataFrame
-        puzzle_idx = len(added_puzzles) - 1
-        logger.debug(f"Assigning PuzzleIdx: {puzzle_idx}")
-        puzzle_df = build_puzzle_dataframe(divergence, fen, base_rating, target_rating, puzzle_idx, ply + 1)
-        save_puzzle_to_csv(puzzle_df)
+        # Build and save the position DataFrame
+        position_idx = len(added_positions) - 1
+        logger.debug(f"Assigning PositionIdx: {position_idx}")
+        position_df = build_position_dataframe(divergence, fen, base_rating, target_rating, position_idx, ply + 1)
+        save_position_to_csv(position_df)
 
-        logger.info(f"Saved puzzle: {divergence['fen'][:20]}...")
+        logger.info(f"Saved position: {divergence['fen'][:20]}...")
 
     # Log the result of the walk
-    if added_puzzles:
-        logger.info(f"Random walk completed with {len(added_puzzles)} puzzles saved to CSV")
+    if added_positions:
+        logger.info(f"Random walk completed with {len(added_positions)} positions saved to CSV")
     else:
         logger.info("Random walk completed without finding any significant divergence")
-    return added_puzzles
+    return added_positions

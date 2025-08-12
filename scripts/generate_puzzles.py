@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from parameters import BASE_RATING, TARGET_RATING
 from src.csv_utils import sort_csv
 from src.logger import logger
-from src.walker import generate_and_save_puzzles
+from src.walker import generate_and_save_positions
 
 load_dotenv()  # Load variables from .env file
 
@@ -29,15 +29,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def count_puzzles(csv_path: str = "output/puzzles.csv") -> int:
+def count_positions(csv_path: str = "output/positions.csv") -> int:
     """
-    Count the number of unique puzzles in the CSV file based on PuzzleIdx.
+    Count the number of unique positions in the CSV file based on PuzzleIdx.
 
     Args:
         csv_path (str): Path to the CSV file.
 
     Returns:
-        int: Number of unique puzzles.
+        int: Number of unique positions.
     """
     if not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0:
         return 0  # Return 0 if file doesn't exist or is empty
@@ -45,10 +45,10 @@ def count_puzzles(csv_path: str = "output/puzzles.csv") -> int:
     try:
         df = pd.read_csv(csv_path, index_col=[0, 1, 2])  # Expect three-level index: Cohort, Row, PuzzleIdx
         count = len(df.index.get_level_values("PuzzleIdx").unique())
-        logger.debug(f"Counted {count} puzzles.")
+        logger.debug(f"Counted {count} positions.")
         return count
     except Exception as e:
-        logger.error(f"Error reading puzzles.csv: {e}. Assuming 0 puzzles.")
+        logger.error(f"Error reading positions.csv: {e}. Assuming 0 positions.")
         return 0
 
 
@@ -62,52 +62,52 @@ def main(num_walks: int = 10) -> None:
     logger.info(f"Starting puzzle generation with {num_walks} walks")
     logger.info(f"Base rating: {BASE_RATING}, Target rating: {TARGET_RATING}")
 
-    # Migrate existing puzzles.csv to three-level index if needed
-    if os.path.exists("output/puzzles.csv") and os.path.getsize("output/puzzles.csv") > 0:
+    # Migrate existing positions.csv to three-level index if needed
+    if os.path.exists("output/positions.csv") and os.path.getsize("output/positions.csv") > 0:
         try:
-            df = pd.read_csv("output/puzzles.csv")
+            df = pd.read_csv("output/positions.csv")
             # Check if the CSV already has the correct three-level index
             if len(df.columns) > 0 and df.columns[0] != "Move":  # If first column isn't "Move", it has index columns
-                df = pd.read_csv("output/puzzles.csv", index_col=[0, 1])
+                df = pd.read_csv("output/positions.csv", index_col=[0, 1])
                 if "PuzzleIdx" in df.columns:
                     df = df.reset_index()
                     df = df.set_index(["Cohort", "Row", "PuzzleIdx"])
-                    df.to_csv("output/puzzles.csv")
-                    logger.info("Migrated puzzles.csv to three-level index (Cohort, Row, PuzzleIdx).")
+                    df.to_csv("output/positions.csv")
+                    logger.info("Migrated positions.csv to three-level index (Cohort, Row, PuzzleIdx).")
         except Exception as e:
-            logger.warning(f"Failed to migrate puzzles.csv: {e}. Starting fresh.")
-            os.remove("output/puzzles.csv")  # Remove corrupted file to start fresh
+            logger.warning(f"Failed to migrate positions.csv: {e}. Starting fresh.")
+            os.remove("output/positions.csv")  # Remove corrupted file to start fresh
 
-    # Count existing puzzles from the single CSV
-    initial_puzzle_count = count_puzzles()
-    logger.info(f"Found {initial_puzzle_count} existing puzzles")
+    # Count existing positions from the single CSV
+    initial_puzzle_count = count_positions()
+    logger.info(f"Found {initial_puzzle_count} existing positions")
 
-    # Track new puzzles to report count at the end
-    new_puzzles_count = 0
+    # Track new positions to report count at the end
+    new_positions_count = 0
     for i in range(num_walks):
         logger.info(f"Generating walk {i+1}/{num_walks}")
-        puzzles = generate_and_save_puzzles(BASE_RATING, TARGET_RATING)
-        walk_puzzle_count = len(puzzles)
-        new_puzzles_count += walk_puzzle_count
-        logger.debug(f"Walk {i+1} added {walk_puzzle_count} puzzles. Running total: {new_puzzles_count}")
-        if not puzzles:
-            logger.warning(f"No puzzles generated for walk {i+1}")
+        positions = generate_and_save_positions(BASE_RATING, TARGET_RATING)
+        walk_puzzle_count = len(positions)
+        new_positions_count += walk_puzzle_count
+        logger.debug(f"Walk {i+1} added {walk_puzzle_count} positions. Running total: {new_positions_count}")
+        if not positions:
+            logger.warning(f"No positions generated for walk {i+1}")
             continue
 
-    # Sort the puzzles.csv file by rating cohort pair
+    # Sort the positions.csv file by rating cohort pair
     sort_csv()
-    logger.info("Sorted puzzles.csv by rating cohort pair")
+    logger.info("Sorted positions.csv by rating cohort pair")
 
-    # Count total puzzles after generation
-    total_puzzle_count = count_puzzles()
+    # Count total positions after generation
+    total_puzzle_count = count_positions()
     logger.debug(
-        f"Initial puzzles: {initial_puzzle_count}, New puzzles: {new_puzzles_count}, Total puzzles: {total_puzzle_count}"
+        f"Initial positions: {initial_puzzle_count}, New positions: {new_positions_count}, Total positions: {total_puzzle_count}"
     )
 
-    if new_puzzles_count > 0:
-        logger.info(f"Added {new_puzzles_count} new puzzles (total: {total_puzzle_count})")
+    if new_positions_count > 0:
+        logger.info(f"Added {new_positions_count} new positions (total: {total_puzzle_count})")
     else:
-        logger.warning("No new puzzles were generated")
+        logger.warning("No new positions were generated")
 
 
 if __name__ == "__main__":

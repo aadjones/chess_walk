@@ -1,5 +1,5 @@
 # puzzle_logic.py
-"""Core logic for processing selected puzzle data, including Stockfish analysis."""
+"""Core logic for processing selected position data, including Stockfish analysis."""
 
 import chess
 import pandas as pd
@@ -21,33 +21,33 @@ except ImportError:
 # Import the single settings instance from config.py
 from config import settings
 
-# --- Data Retrieval (keep get_puzzle_data as is) ---
-def get_puzzle_data(puzzle_groups, current_puzzle_id):
-    # ... (function content unchanged) ...
-    if current_puzzle_id is None or puzzle_groups is None: return None
+# --- Data Retrieval ---
+def get_position_data(position_groups, current_position_id):
+    """Get position data for the selected position ID."""
+    if current_position_id is None or position_groups is None: return None
     try:
-        puzzle_df = puzzle_groups.get_group(current_puzzle_id).copy()
-        if puzzle_df.empty:
-             st.warning(f"No data found for Puzzle ID {current_puzzle_id}.")
+        position_df = position_groups.get_group(current_position_id).copy()
+        if position_df.empty:
+             st.warning(f"No data found for Position ID {current_position_id}.")
              return None
-        return puzzle_df
+        return position_df
     except KeyError:
-        st.error(f"Internal Error: Puzzle ID {current_puzzle_id} not found in groups.")
+        st.error(f"Internal Error: Position ID {current_position_id} not found in groups.")
         return None
     except Exception as e:
-        st.error(f"An error occurred retrieving puzzle data: {e}")
+        st.error(f"An error occurred retrieving position data: {e}")
         return None
 
-# --- Board and Move Preparation (keep prepare_board_data as is) ---
-def prepare_board_data(puzzle_df):
-    # ... (function content unchanged) ...
-    if puzzle_df is None or puzzle_df.empty: return None, None, pd.DataFrame(), pd.DataFrame(), None, None
-    if settings.col_fen not in puzzle_df.columns: return None, None, pd.DataFrame(), pd.DataFrame(), None, None
-    fen = puzzle_df[settings.col_fen].iloc[0]
+# --- Board and Move Preparation ---
+def prepare_board_data(position_df):
+    """Prepare board data for the selected position."""
+    if position_df is None or position_df.empty: return None, None, pd.DataFrame(), pd.DataFrame(), None, None
+    if settings.col_fen not in position_df.columns: return None, None, pd.DataFrame(), pd.DataFrame(), None, None
+    fen = position_df[settings.col_fen].iloc[0]
     try: board = chess.Board(fen)
     except ValueError: return None, None, pd.DataFrame(), pd.DataFrame(), None, None
-    base_data = puzzle_df[puzzle_df[settings.col_cohort] == settings.base_cohort_id].copy()
-    target_data = puzzle_df[puzzle_df[settings.col_cohort] == settings.target_cohort_id].copy()
+    base_data = position_df[position_df[settings.col_cohort] == settings.base_cohort_id].copy()
+    target_data = position_df[position_df[settings.col_cohort] == settings.target_cohort_id].copy()
     if settings.col_freq in base_data.columns: base_data.sort_values(settings.col_freq, ascending=False, inplace=True)
     if settings.col_freq in target_data.columns: target_data.sort_values(settings.col_freq, ascending=False, inplace=True)
     base_top_uci = None

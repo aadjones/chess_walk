@@ -1,13 +1,13 @@
 # app.py
 """
-Main Streamlit application file for exploring Chess Puzzle Cohort data.
+Main Streamlit application file for exploring Chess Position Cohort data.
 Orchestrates data loading, UI, processing, and display, including Stockfish analysis.
 """
 import streamlit as st
 import pandas as pd
 
 # --- Page Configuration (should be first Streamlit command) ---
-st.set_page_config(layout="wide", page_title="Chess Puzzle Explorer")
+st.set_page_config(layout="wide", page_title="Chess Position Explorer")
 
 # --- Import Modules ---
 # Configuration (loads and validates on import)
@@ -15,22 +15,22 @@ from config import settings
 
 # Data Loading
 from data_loader import (
-    load_puzzle_data,
+    load_position_data,
     get_unique_cohort_pairs,
     filter_data_by_cohort_pair,
-    group_by_puzzle_index,
+    group_by_position_index,
 )
 
 # Session State Management
 from session_state_utils import initialize_session_state
 
 # UI Components
-from sidebar import create_cohort_pair_selector, create_puzzle_controls
+from sidebar import create_cohort_pair_selector, create_position_controls
 from display import layout_main_content # Imports the layout function
 
 # Core Logic
 from puzzle_logic import (
-    get_puzzle_data,
+    get_position_data,
     prepare_board_data,
     convert_moves_to_san,
     get_stockfish_analysis # Imports the analysis function
@@ -48,17 +48,17 @@ from data_formatting import (
 
 def main():
     """Main function to orchestrate the app workflow."""
-    st.title("Chess Puzzle Cohort Analysis")
+    st.title("Chess Position Cohort Analysis")
 
     # --- Initialization ---
     initialize_session_state()
-    puzzles_df = load_puzzle_data()
+    positions_df = load_position_data()
 
-    if puzzles_df is None or puzzles_df.empty:
-        st.error("Failed to load puzzle data. Application cannot continue.")
+    if positions_df is None or positions_df.empty:
+        st.error("Failed to load position data. Application cannot continue.")
         st.stop()
 
-    unique_pairs = get_unique_cohort_pairs(puzzles_df)
+    unique_pairs = get_unique_cohort_pairs(positions_df)
     if not unique_pairs:
         st.warning("No Cohort Pairs found in the data.")
         st.stop()
@@ -69,35 +69,35 @@ def main():
          st.stop()
 
     # --- Data Filtering & Grouping ---
-    filtered_df = filter_data_by_cohort_pair(puzzles_df, selected_cohort_pair)
+    filtered_df = filter_data_by_cohort_pair(positions_df, selected_cohort_pair)
     if filtered_df.empty:
-        st.warning(f"No puzzle data found for Cohort Pair: {selected_cohort_pair}")
-        create_puzzle_controls([])
+        st.warning(f"No position data found for Cohort Pair: {selected_cohort_pair}")
+        create_position_controls([])
         st.stop()
 
-    puzzle_groups, puzzle_ids = group_by_puzzle_index(filtered_df)
-    if not puzzle_ids:
-        st.warning(f"No puzzles found for Cohort Pair: {selected_cohort_pair}")
-        create_puzzle_controls([])
+    position_groups, position_ids = group_by_position_index(filtered_df)
+    if not position_ids:
+        st.warning(f"No positions found for Cohort Pair: {selected_cohort_pair}")
+        create_position_controls([])
         st.stop()
 
-    current_puzzle_id = create_puzzle_controls(puzzle_ids)
-    if current_puzzle_id is None:
-        st.info("Select a puzzle from the sidebar.")
+    current_position_id = create_position_controls(position_ids)
+    if current_position_id is None:
+        st.info("Select a position from the sidebar.")
         st.stop()
 
-    # --- Puzzle Processing ---
-    puzzle_df = get_puzzle_data(puzzle_groups, current_puzzle_id)
-    if puzzle_df is None or puzzle_df.empty:
+    # --- Position Processing ---
+    position_df = get_position_data(position_groups, current_position_id)
+    if position_df is None or position_df.empty:
         st.stop()
 
-    if settings.col_fen not in puzzle_df.columns:
+    if settings.col_fen not in position_df.columns:
         st.error(f"Critical Error: '{settings.col_fen}' column missing.")
         st.stop()
-    fen = puzzle_df[settings.col_fen].iloc[0]
+    fen = position_df[settings.col_fen].iloc[0]
 
     # Prepare board data AND get raw UCI moves needed for Stockfish
-    board, svg_board, base_data_raw, target_data_raw, base_uci, target_uci = prepare_board_data(puzzle_df)
+    board, svg_board, base_data_raw, target_data_raw, base_uci, target_uci = prepare_board_data(position_df)
 
     # --- Data Formatting ---
     base_rating = infer_rating(base_data_raw, settings.base_cohort_id.capitalize())

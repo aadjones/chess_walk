@@ -2,7 +2,7 @@
 """Handles the creation and logic of the Streamlit sidebar."""
 
 import streamlit as st
-from session_state_utils import clamp_puzzle_index, update_cohort_pair, update_puzzle_index
+from session_state_utils import clamp_position_index, update_cohort_pair, update_position_index
 from config import settings # Import settings if needed for labels, though not strictly required here currently
 
 def create_cohort_pair_selector(unique_pairs):
@@ -35,37 +35,37 @@ def create_cohort_pair_selector(unique_pairs):
     return st.session_state["selected_cohort_pair"]
 
 
-def create_puzzle_controls(puzzle_ids):
-    """Create sidebar controls for puzzle navigation and return the chosen puzzle ID."""
-    st.sidebar.title("Puzzle Controls")
+def create_position_controls(position_ids):
+    """Create sidebar controls for position navigation and return the chosen position ID."""
+    st.sidebar.title("Position Controls")
 
-    num_puzzles = len(puzzle_ids)
+    num_positions = len(position_ids)
     # Ensure index exists and is valid before accessing
-    current_index = st.session_state.get("puzzle_index", 0)
-    if num_puzzles > 0:
-        current_index = max(0, min(current_index, num_puzzles - 1))
+    current_index = st.session_state.get("position_index", 0)
+    if num_positions > 0:
+        current_index = max(0, min(current_index, num_positions - 1))
     else:
         current_index = 0
 
 
     # --- Navigation Buttons ---
-    st.sidebar.caption(f"Puzzle {current_index + 1} of {num_puzzles}" if num_puzzles > 0 else "No puzzles")
+    st.sidebar.caption(f"Position {current_index + 1} of {num_positions}" if num_positions > 0 else "No positions")
     col1, col2 = st.sidebar.columns(2)
 
     # Disable buttons appropriately
     disable_prev = (current_index <= 0)
-    disable_next = (current_index >= num_puzzles - 1)
+    disable_next = (current_index >= num_positions - 1)
 
-    def prev_puzzle():
-        if st.session_state["puzzle_index"] > 0:
-            st.session_state["puzzle_index"] -= 1
+    def prev_position():
+        if st.session_state["position_index"] > 0:
+            st.session_state["position_index"] -= 1
             # Need to reset Stockfish display when navigating with buttons too
             if "show_stockfish" in st.session_state:
                 st.session_state.show_stockfish = False
 
-    def next_puzzle():
-        if st.session_state["puzzle_index"] < num_puzzles - 1:
-            st.session_state["puzzle_index"] += 1
+    def next_position():
+        if st.session_state["position_index"] < num_positions - 1:
+            st.session_state["position_index"] += 1
             # Need to reset Stockfish display when navigating with buttons too
             if "show_stockfish" in st.session_state:
                 st.session_state.show_stockfish = False
@@ -73,7 +73,7 @@ def create_puzzle_controls(puzzle_ids):
     with col1:
         st.button(
             "← Previous",
-            on_click=prev_puzzle,
+            on_click=prev_position,
             key="prev_button",
             disabled=disable_prev,
             use_container_width=True
@@ -81,7 +81,7 @@ def create_puzzle_controls(puzzle_ids):
     with col2:
         st.button(
             "Next →",
-            on_click=next_puzzle,
+            on_click=next_position,
             key="next_button",
             disabled=disable_next,
             use_container_width=True
@@ -89,42 +89,42 @@ def create_puzzle_controls(puzzle_ids):
 
     st.sidebar.divider()
 
-    # --- Puzzle Selection Dropdown ---
-    if not puzzle_ids:
-        st.sidebar.info("No puzzles available for this Cohort Pair.")
-        return None # Explicitly return None if no puzzles
+    # --- Position Selection Dropdown ---
+    if not position_ids:
+        st.sidebar.info("No positions available for this Cohort Pair.")
+        return None # Explicitly return None if no positions
 
-    # Ensure puzzle_index is valid before using it for the selectbox default
-    clamp_puzzle_index(puzzle_ids) # Ensures index is within [0, num_puzzles-1]
+    # Ensure position_index is valid before using it for the selectbox default
+    clamp_position_index(position_ids) # Ensures index is within [0, num_positions-1]
 
-    # Let user directly select from the puzzle IDs using display index
-    puzzle_display_options = range(num_puzzles)
-    # Format function shows the actual PuzzleIdx from the data
-    def format_puzzle_option(display_index):
-         # Handle potential index out of bounds if puzzle_ids is modified unexpectedly
+    # Let user directly select from the position IDs using display index
+    position_display_options = range(num_positions)
+    # Format function shows the actual PositionIdx from the data
+    def format_position_option(display_index):
+         # Handle potential index out of bounds if position_ids is modified unexpectedly
          try:
-             actual_puzzle_id = puzzle_ids[display_index]
-             return f"Puzzle {actual_puzzle_id} (Index {display_index})"
+             actual_position_id = position_ids[display_index]
+             return f"Position {actual_position_id} (Index {display_index})"
          except IndexError:
              return f"Invalid Index {display_index}"
 
     selected_display_index = st.sidebar.selectbox(
-        "Select Puzzle:",
-        options=puzzle_display_options,
-        index=st.session_state["puzzle_index"],
-        format_func=format_puzzle_option,
-        key="puzzle_selector", # Add key
+        "Select Position:",
+        options=position_display_options,
+        index=st.session_state["position_index"],
+        format_func=format_position_option,
+        key="position_selector", # Add key
         label_visibility="collapsed" # Hide label, rely on title/divider
     )
 
     # Update session state based on selectbox choice *before* returning
-    # update_puzzle_index handles resetting stockfish display
-    update_puzzle_index(selected_display_index)
+    # update_position_index handles resetting stockfish display
+    update_position_index(selected_display_index)
 
-    # Return the actual puzzle ID corresponding to the selected display index
-    # Safely access puzzle_ids using the validated index from session state
+    # Return the actual position ID corresponding to the selected display index
+    # Safely access position_ids using the validated index from session state
     try:
-        return puzzle_ids[st.session_state["puzzle_index"]]
+        return position_ids[st.session_state["position_index"]]
     except IndexError:
-         st.error("Error retrieving selected puzzle ID.")
+         st.error("Error retrieving selected position ID.")
          return None # Return None on error

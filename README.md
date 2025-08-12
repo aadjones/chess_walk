@@ -15,8 +15,8 @@ cd chess_walk
 Set up a virtual environment:
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv env
+source env/bin/activate  # On Windows: env\Scripts\activate
 ```
 
 Install dependencies:
@@ -27,7 +27,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-Edit the parameters in ```parameters.py``` to taste.
+Edit the parameters in `parameters.py` to taste.
 
 Then, from the project root, run
 
@@ -43,7 +43,7 @@ Next, to visualize the results, from the project root, run
 streamlit run ui/streamlit_app.py
 ```
 
-This will build a data visualization based on the data scraped from your ```generate_puzzles.py``` script.
+This will build a data visualization based on the data scraped from your `generate_puzzles.py` script.
 
 ## Development
 
