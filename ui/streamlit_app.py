@@ -48,7 +48,7 @@ from data_formatting import (
 
 def main():
     """Main function to orchestrate the app workflow."""
-    st.title("ChessWalk")
+    st.title("ChessWalk")  # v2.0
 
     # --- Explainer Section ---
     with st.expander("ℹ️ What is this tool?"):
