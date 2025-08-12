@@ -8,7 +8,7 @@ def initialize_session_state():
     if "position_index" not in st.session_state:
         st.session_state["position_index"] = 0
     if "selected_cohort_pair" not in st.session_state:
-        st.session_state["selected_cohort_pair"] = None
+        st.session_state["selected_cohort_pair"] = "1400-1800"
     # Add flag for Stockfish display
     if "show_stockfish" not in st.session_state:
         st.session_state["show_stockfish"] = False # Default to hidden
@@ -39,6 +39,8 @@ def update_cohort_pair(new_cohort_pair):
         st.session_state["selected_cohort_pair"] = new_cohort_pair
         st.session_state["position_index"] = 0 # Reset position index
         reset_stockfish_display_on_change() # Reset SF display
+        # Force rerun to update filtered data immediately
+        st.rerun()
     # Ensure it's set even if it's the same or first time
     st.session_state["selected_cohort_pair"] = new_cohort_pair
 

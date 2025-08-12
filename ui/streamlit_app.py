@@ -48,7 +48,27 @@ from data_formatting import (
 
 def main():
     """Main function to orchestrate the app workflow."""
-    st.title("Chess Position Cohort Analysis")
+    st.title("ChessWalk")
+
+    # --- Explainer Section ---
+    with st.expander("ℹ️ What is this tool?"):
+        st.markdown("""
+        **Discover how chess players of different strengths think differently about the same positions.**
+        
+        This tool analyzes real chess positions where players of different rating levels make 
+        significantly different move choices. Each position shows:
+        
+        - 📊 **Move preferences** by rating cohort (e.g., 1000 vs 1400)
+        - 🎯 **Statistical significance**: only positions with meaningful differences
+        - ♟️ **Annotated board** to see the move preference difference at a glance (red is the weaker move; blue is the more effective move)
+        - 🤖 **Optional Stockfish analysis** to see the computer's perspective
+        
+        **How to use:** Select a cohort pair from the sidebar to compare how different 
+        strength players approach the same positions. Navigate between positions to see 
+        various strategic and tactical themes.
+        
+        📖 **Learn more:** [Read the full explanation]({}) about this analysis method.
+        """.format("https://lichess.org/@/HarpSeal/blog/steal-better-moves/HAqUauJU"))
 
     # --- Initialization ---
     initialize_session_state()
@@ -69,22 +89,35 @@ def main():
          st.stop()
 
     # --- Data Filtering & Grouping ---
+    # Get total positions across all cohorts for global context
+    from config import settings
+    all_position_ids = sorted(positions_df[settings.col_position_idx].unique().tolist())
+    total_positions = len(all_position_ids)
+    
     filtered_df = filter_data_by_cohort_pair(positions_df, selected_cohort_pair)
     if filtered_df.empty:
         st.warning(f"No position data found for Cohort Pair: {selected_cohort_pair}")
-        create_position_controls([])
+        create_position_controls([], total_positions, all_position_ids)
         st.stop()
 
     position_groups, position_ids = group_by_position_index(filtered_df)
     if not position_ids:
         st.warning(f"No positions found for Cohort Pair: {selected_cohort_pair}")
-        create_position_controls([])
+        create_position_controls([], total_positions, all_position_ids)
         st.stop()
 
-    current_position_id = create_position_controls(position_ids)
+    current_position_id = create_position_controls(position_ids, total_positions, all_position_ids)
     if current_position_id is None:
         st.info("Select a position from the sidebar.")
         st.stop()
+
+    # If user selected a position from different cohort, switch to that cohort
+    if current_position_id not in position_ids:
+        # Find which cohort this position belongs to
+        position_cohort = positions_df[positions_df[settings.col_position_idx] == current_position_id][settings.col_cohort_pair].iloc[0]
+        # Update session state to switch cohorts
+        st.session_state["selected_cohort_pair"] = position_cohort
+        st.rerun()
 
     # --- Position Processing ---
     position_df = get_position_data(position_groups, current_position_id)

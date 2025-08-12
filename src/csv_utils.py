@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def sort_csv(input_path: str = "output/puzzles.csv", output_path: str = "output/puzzles.csv") -> None:
+def sort_csv(input_path: str = "output/positions.csv", output_path: str = "output/positions.csv") -> None:
     """
     Reads a CSV file from input_path, sorts the rows by the lower bound of the rating
     in the 'CohortPair' column, and writes the sorted DataFrame to output_path.

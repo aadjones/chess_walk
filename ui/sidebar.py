@@ -23,10 +23,15 @@ def create_cohort_pair_selector(unique_pairs):
     except ValueError:
         default_index = 0 # Fallback just in case
 
+    # Format cohort pairs for display (replace - with vs)
+    def format_cohort_pair(pair):
+        return pair.replace("-", " vs ")
+
     new_cohort_pair = st.sidebar.selectbox(
         "Cohort Pair:", # Shorten label
         unique_pairs,
         index=default_index,
+        format_func=format_cohort_pair,  # Format display text
         key="cohort_pair_selector", # Add key for stability
         label_visibility="collapsed" # Hide label if subheader is enough
     )
@@ -35,7 +40,7 @@ def create_cohort_pair_selector(unique_pairs):
     return st.session_state["selected_cohort_pair"]
 
 
-def create_position_controls(position_ids):
+def create_position_controls(position_ids, total_positions=None, all_position_ids=None):
     """Create sidebar controls for position navigation and return the chosen position ID."""
     st.sidebar.title("Position Controls")
 
@@ -97,34 +102,58 @@ def create_position_controls(position_ids):
     # Ensure position_index is valid before using it for the selectbox default
     clamp_position_index(position_ids) # Ensures index is within [0, num_positions-1]
 
-    # Let user directly select from the position IDs using display index
-    position_display_options = range(num_positions)
+    # Use all_position_ids for global dropdown if available, otherwise fall back to cohort-local
+    dropdown_position_ids = all_position_ids if all_position_ids is not None else position_ids
+    position_display_options = range(len(dropdown_position_ids))
+    
     # Format function shows the actual PositionIdx from the data
     def format_position_option(display_index):
          # Handle potential index out of bounds if position_ids is modified unexpectedly
          try:
-             actual_position_id = position_ids[display_index]
-             return f"Position {actual_position_id} (Index {display_index})"
+             actual_position_id = dropdown_position_ids[display_index]
+             return f"Position {actual_position_id}"
          except IndexError:
-             return f"Invalid Index {display_index}"
+             return f"Invalid Position"
 
+    # Show global context in dropdown label
+    global_label = f"Jump to any position (1-{total_positions})" if total_positions else "Select Position:"
+    
+    # For global dropdown, find the index of the current position
+    current_position_id = position_ids[st.session_state.get("position_index", 0)] if position_ids else None
+    try:
+        dropdown_default_index = dropdown_position_ids.index(current_position_id) if current_position_id in dropdown_position_ids else 0
+    except (ValueError, IndexError):
+        dropdown_default_index = 0
+    
     selected_display_index = st.sidebar.selectbox(
-        "Select Position:",
+        global_label,
         options=position_display_options,
-        index=st.session_state["position_index"],
+        index=dropdown_default_index,
         format_func=format_position_option,
         key="position_selector", # Add key
-        label_visibility="collapsed" # Hide label, rely on title/divider
+        label_visibility="visible"  # Show the label to explain global context
     )
 
-    # Update session state based on selectbox choice *before* returning
-    # update_position_index handles resetting stockfish display
-    update_position_index(selected_display_index)
-
-    # Return the actual position ID corresponding to the selected display index
-    # Safely access position_ids using the validated index from session state
+    # Get the selected position ID from the dropdown
     try:
-        return position_ids[st.session_state["position_index"]]
+        selected_position_id = dropdown_position_ids[selected_display_index]
     except IndexError:
-         st.error("Error retrieving selected position ID.")
-         return None # Return None on error
+        st.error("Error retrieving selected position ID.")
+        return None
+
+    # If using global dropdown and user selected a position outside current cohort,
+    # we need to return the selected position ID directly without updating local session state
+    if all_position_ids is not None and selected_position_id not in position_ids:
+        # User selected a position from a different cohort - return it directly
+        return selected_position_id
+    else:
+        # User selected a position within current cohort - use normal session state logic
+        # Find the local index of the selected position
+        try:
+            local_index = position_ids.index(selected_position_id)
+            update_position_index(local_index)
+            return selected_position_id
+        except ValueError:
+            # This shouldn't happen, but handle gracefully
+            update_position_index(selected_display_index)
+            return position_ids[st.session_state["position_index"]] if position_ids else None
