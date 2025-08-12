@@ -119,9 +119,10 @@ def create_position_controls(position_ids, total_positions=None, all_position_id
     global_label = f"Jump to any position (1-{total_positions})" if total_positions else "Select Position:"
     
     # For global dropdown, find the index of the current position
-    current_position_id = position_ids[st.session_state.get("position_index", 0)] if position_ids else None
+    current_position_index = st.session_state.get("position_index", 0)
+    current_position_id = position_ids[current_position_index] if position_ids and current_position_index < len(position_ids) else None
     try:
-        dropdown_default_index = dropdown_position_ids.index(current_position_id) if current_position_id in dropdown_position_ids else 0
+        dropdown_default_index = dropdown_position_ids.index(current_position_id) if current_position_id and current_position_id in dropdown_position_ids else 0
     except (ValueError, IndexError):
         dropdown_default_index = 0
     
