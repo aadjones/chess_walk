@@ -6,10 +6,11 @@ with defaults suitable for Streamlit Community Cloud deployment.
 """
 
 import os
-from pydantic import Field, field_validator, ValidationError
-from pydantic_settings import BaseSettings, SettingsConfigDict
-import streamlit as st
 import shutil  # To check if executable exists in PATH
+
+import streamlit as st
+from pydantic import Field, ValidationError, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # --- Default Stockfish Path for Linux/SCC ---
 # Try common paths where apt might install stockfish

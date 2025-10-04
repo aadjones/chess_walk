@@ -5,9 +5,10 @@ These tests lock in the correct behavior to prevent regression of the
 position jumping bug where users would select position X but end up at position Y.
 """
 
-import pytest
-import pandas as pd
 import os
+
+import pandas as pd
+import pytest
 
 
 def filter_data_by_cohort_pair(positions_df, selected_cohort_pair):

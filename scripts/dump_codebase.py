@@ -7,10 +7,10 @@ a comment containing its filename, and concatenate all processed files
 into a single output text file, skipping specified directories.
 """
 
-import os
-import sys
 import argparse
 import io  # Using io.open for explicit encoding control is good practice
+import os
+import sys
 
 # --- Default Configuration ---
 # Common directories to skip by default

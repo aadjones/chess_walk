@@ -1,11 +1,22 @@
 # data_loader.py
 """Handles loading data for the application."""
 
+from dataclasses import dataclass
+
 import pandas as pd
 import streamlit as st
 
 # Import the single settings instance
 from config import settings
+
+
+@dataclass
+class PositionMetadata:
+    """Metadata for a single position - enables O(1) lookups."""
+
+    position_id: int
+    cohort_pair: str
+    fen: str
 
 
 @st.cache_data(ttl=60)  # Cache with 60 second TTL to force refresh
@@ -85,3 +96,22 @@ def group_by_position_index(filtered_df):
     except Exception as e:
         st.error(f"Error grouping data by position index: {e}")
         return None, []
+
+
+@st.cache_data
+def build_position_lookup(positions_df: pd.DataFrame) -> dict[int, PositionMetadata]:
+    """Build a lookup dict: position_id -> metadata. Enables O(1) navigation lookups.
+
+    This is the single source of truth for "which cohort has position X?"
+    """
+    if positions_df is None or positions_df.empty:
+        return {}
+
+    lookup = {}
+    for _, row in positions_df.iterrows():
+        pos_id = row[settings.col_position_idx]
+        if pos_id not in lookup:  # Take first occurrence of each position
+            lookup[pos_id] = PositionMetadata(
+                position_id=pos_id, cohort_pair=row[settings.col_cohort_pair], fen=row[settings.col_fen]
+            )
+    return lookup

@@ -1,12 +1,13 @@
 # display.py
 """Handles the layout and display of the main application content."""
 
-import streamlit as st
-import pandas as pd
 import math  # For checking numeric types and NaN/inf
+
 import chess  # Import python-chess to parse FEN
-from session_state_utils import toggle_stockfish_display
+import pandas as pd
+import streamlit as st
 from config import settings
+from session_state_utils import toggle_stockfish_display
 
 
 def format_eval_for_display(numeric_eval, eval_type):
@@ -142,7 +143,7 @@ def layout_main_content(
         if fen:
             st.markdown(f"**FEN**: `{fen}`")
         if svg_board:
-            st.image(svg_board, use_container_width=True)
+            st.image(svg_board, width="stretch")
         else:
             st.warning("Board image could not be generated or is unavailable.")
 
@@ -160,13 +161,13 @@ def layout_main_content(
     with mid_col:
         st.markdown(f"### Base Cohort ({base_rating})")
         if base_display_df is not None and not base_display_df.empty:
-            st.dataframe(base_display_df, use_container_width=True, hide_index=True)
+            st.dataframe(base_display_df, width="stretch", hide_index=True)
         else:
             st.info("No data available for the Base Cohort.")
 
     with right_col:
         st.markdown(f"### Target Cohort ({target_rating})")
         if target_display_df is not None and not target_display_df.empty:
-            st.dataframe(target_display_df, use_container_width=True, hide_index=True)
+            st.dataframe(target_display_df, width="stretch", hide_index=True)
         else:
             st.info("No data available for the Target Cohort.")

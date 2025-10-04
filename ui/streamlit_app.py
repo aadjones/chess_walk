@@ -3,8 +3,8 @@
 Main Streamlit application file for exploring Chess Position Cohort data.
 Orchestrates data loading, UI, processing, and display, including Stockfish analysis.
 """
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
 # --- Page Configuration (should be first Streamlit command) ---
 st.set_page_config(layout="wide", page_title="Chess Position Explorer")
@@ -13,29 +13,6 @@ st.set_page_config(layout="wide", page_title="Chess Position Explorer")
 # Configuration (loads and validates on import)
 from config import settings
 
-# Data Loading
-from data_loader import (
-    load_position_data,
-    get_unique_cohort_pairs,
-    filter_data_by_cohort_pair,
-    group_by_position_index,
-)
-
-# Session State Management
-from session_state_utils import initialize_session_state
-
-# UI Components
-from sidebar import create_cohort_pair_selector, create_position_controls
-from display import layout_main_content  # Imports the layout function
-
-# Core Logic
-from puzzle_logic import (
-    get_position_data,
-    prepare_board_data,
-    convert_moves_to_san,
-    get_stockfish_analysis,  # Imports the analysis function
-)
-
 # Data Formatting
 from data_formatting import (
     cleanup_dataframe,
@@ -43,6 +20,29 @@ from data_formatting import (
     infer_rating,
     prepare_display_dataframe,
 )
+
+# Data Loading
+from data_loader import (
+    filter_data_by_cohort_pair,
+    get_unique_cohort_pairs,
+    group_by_position_index,
+    load_position_data,
+)
+from display import layout_main_content  # Imports the layout function
+
+# Core Logic
+from puzzle_logic import (
+    convert_moves_to_san,
+    get_position_data,
+    get_stockfish_analysis,
+    prepare_board_data,
+)
+
+# Session State Management
+from session_state_utils import initialize_session_state
+
+# UI Components
+from sidebar import create_cohort_pair_selector, create_position_controls
 
 # --- Main Application Logic ---
 
@@ -94,50 +94,20 @@ def main():
         st.stop()
 
     # --- Data Filtering & Grouping ---
-    # Get total positions across all cohorts for global context
-    from config import settings
-
-    all_position_ids = sorted(positions_df[settings.col_position_idx].unique().tolist())
-    total_positions = len(all_position_ids)
-
     filtered_df = filter_data_by_cohort_pair(positions_df, selected_cohort_pair)
     if filtered_df.empty:
         st.warning(f"No position data found for Cohort Pair: {selected_cohort_pair}")
-        create_position_controls([], total_positions, all_position_ids)
         st.stop()
 
     position_groups, position_ids = group_by_position_index(filtered_df)
     if not position_ids:
         st.warning(f"No positions found for Cohort Pair: {selected_cohort_pair}")
-        create_position_controls([], total_positions, all_position_ids)
         st.stop()
 
-    # Handle requested position after cohort switch
-    if "requested_position_id" in st.session_state:
-        requested_id = st.session_state["requested_position_id"]
-        if requested_id in position_ids:
-            # Set the position index to the requested position
-            local_index = position_ids.index(requested_id)
-            st.session_state["position_index"] = local_index
-        # Clear the request
-        del st.session_state["requested_position_id"]
-
-    current_position_id = create_position_controls(position_ids, total_positions, all_position_ids)
+    current_position_id = create_position_controls(position_ids)
     if current_position_id is None:
         st.info("Select a position from the sidebar.")
         st.stop()
-
-    # If user selected a position from different cohort, switch to that cohort
-    if current_position_id not in position_ids:
-        # Find which cohort this position belongs to
-        position_cohort = positions_df[positions_df[settings.col_position_idx] == current_position_id][
-            settings.col_cohort_pair
-        ].iloc[0]
-        # Update session state to switch cohorts
-        st.session_state["selected_cohort_pair"] = position_cohort
-        # Store the requested position so we don't lose it
-        st.session_state["requested_position_id"] = current_position_id
-        st.rerun()
 
     # --- Position Processing ---
     position_df = get_position_data(position_groups, current_position_id)

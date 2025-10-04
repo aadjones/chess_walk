@@ -1,13 +1,14 @@
 # puzzle_logic.py
 """Core logic for processing selected position data, including Stockfish analysis."""
 
+import math  # For checking NaN/inf in evaluations
+import os
+import sys
+
 import chess
 import pandas as pd
 import streamlit as st
-import os
-import sys
 from stockfish import Stockfish  # Import Stockfish library
-import math  # For checking NaN/inf in evaluations
 
 # Path setup for src/chess_utils (adjust if your structure differs)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

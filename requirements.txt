@@ -20,3 +20,4 @@ stockfish
 pydantic
 pydantic-settings
 python-dotenv>=1.0.0
+watchdog
